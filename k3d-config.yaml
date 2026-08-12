@@ -1,0 +1,43 @@
+# k3d Cluster Configuration for k8s-portfolio
+#
+# k3d creates a Kubernetes cluster inside Docker containers.
+# Each "node" you see in kubectl is actually a Docker container running k3s.
+#
+# Why 1 server + 2 agents?
+#   - "server" is the control plane (runs the API server, scheduler, etc.)
+#   - "agents" are worker nodes (where your Pods actually run)
+#   - 2 agents gives us a realistic multi-node cluster for the topology view
+#     (it's more interesting to see pods spread across nodes than all on one)
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  # This name becomes your kubectl context: k3d-portfolio
+  name: portfolio
+
+# 1 control plane node — this runs the Kubernetes API server
+servers: 1
+
+# 2 worker nodes — Pods will be scheduled onto these
+agents: 2
+
+ports:
+  # This is the critical line for local development:
+  # It maps port 8080 on your laptop → port 80 on the load balancer Docker container
+  # that k3d creates in front of the cluster. When you `curl localhost:8080/about`,
+  # it enters the cluster through this port and hits Traefik.
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer  # "loadbalancer" is the special k3d container that acts as the entry point
+
+image: rancher/k3s:v1.29.2-k3s1  # Pin to a specific k3s version for reproducibility
+
+options:
+  k3s:
+    extraArgs:
+      # Disable k3s servicelb — k3d provides its own load balancer container.
+      # Traefik stays enabled as the built-in ingress controller.
+      - arg: --disable=servicelb
+        nodeFilters:
+          - server:*  # Apply this to all server nodes

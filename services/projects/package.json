@@ -1,0 +1,15 @@
+{
+  "name": "projects-service",
+  "version": "1.0.0",
+  "description": "Portfolio projects section — serves project list with live GitHub stats",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0",
+    "marked": "^9.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+# manifests/frontend/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+  type: ClusterIP

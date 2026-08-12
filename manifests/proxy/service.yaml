@@ -1,0 +1,15 @@
+# manifests/proxy/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: proxy
+spec:
+  selector:
+    app: proxy
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080   # Proxy listens on 8080, Service exposes it as 80
+      protocol: TCP
+  type: ClusterIP

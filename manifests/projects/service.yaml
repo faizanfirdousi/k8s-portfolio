@@ -1,0 +1,15 @@
+# manifests/projects/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: projects
+  namespace: projects
+spec:
+  selector:
+    app: projects
+  ports:
+    - name: http
+      port: 80          # Service listens on 80 (so the Ingress can route to it consistently)
+      targetPort: 3000  # Forward to the Node.js app's port 3000
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,122 @@
+# manifests/ingress.yaml
+#
+# Traefik routing for the entire portfolio.
+# k3s ships Traefik as the built-in ingress controller — we use its IngressRoute CRD
+# for path-based routing and StripPrefix middlewares to rewrite URLs before forwarding.
+#
+# HOW TRAFFIC FLOWS:
+#   1. A browser request hits the k3d load balancer on port 80 (mapped from localhost:8080)
+#   2. The load balancer forwards to the Traefik controller Pod in kube-system
+#   3. Traefik reads this IngressRoute and matches the request path to a backend Service
+#   4. StripPrefix middleware removes the section prefix (/about, /blog, etc.) before forwarding
+#   5. The Service routes to a healthy Pod
+#
+# Cross-namespace routing:
+#   Services live in different namespaces. Standard Ingress can only route within one namespace.
+#   We solve this with ExternalName Services in default (see cross-namespace-services.yaml)
+#   that alias to the real Services in each section namespace.
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-about
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+      - /about
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-projects
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+      - /projects
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-blog
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+      - /blog
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-contact
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+      - /contact
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: portfolio
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    # More specific paths first; catch-all last.
+    - match: PathPrefix(`/api`)
+      kind: Rule
+      priority: 20
+      services:
+        - name: proxy
+          port: 80
+
+    - match: PathPrefix(`/about`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-about
+      services:
+        - name: about
+          port: 80
+
+    - match: PathPrefix(`/projects`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-projects
+      services:
+        - name: projects
+          port: 80
+
+    - match: PathPrefix(`/blog`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-blog
+      services:
+        - name: blog
+          port: 80
+
+    - match: PathPrefix(`/contact`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-contact
+      services:
+        - name: contact
+          port: 80
+
+    - match: PathPrefix(`/`)
+      kind: Rule
+      priority: 1
+      services:
+        - name: frontend
+          port: 80

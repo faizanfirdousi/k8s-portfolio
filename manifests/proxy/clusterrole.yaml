@@ -1,0 +1,33 @@
+# manifests/proxy/clusterrole.yaml
+#
+# WHY ClusterRole AND NOT Role?
+# ─────────────────────────────
+# "nodes" is a CLUSTER-SCOPED resource in Kubernetes.
+# This means nodes don't belong to any namespace — they exist at the cluster level.
+#
+# A namespace-scoped "Role" can only grant access to NAMESPACED resources
+# (pods, services, configmaps, etc. within a specific namespace).
+# A "ClusterRole" can grant access to cluster-scoped resources (like nodes)
+# AND can optionally be used to grant access across all namespaces.
+#
+# For our proxy, we need ClusterRole because:
+#   1. "nodes" is cluster-scoped → requires ClusterRole
+#   2. We want to list pods across ALL namespaces → easier with ClusterRole
+#
+# This ClusterRole grants EXACTLY what the proxy needs and NOTHING else:
+#   - Verbs: get, list, watch (READ ONLY — no create, update, delete, patch)
+#   - Resources: pods, nodes ONLY (no secrets, configmaps, deployments, etc.)
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topology-reader
+  labels:
+    app.kubernetes.io/part-of: portfolio
+rules:
+  - apiGroups: [""]    # "" is the "core" API group — covers pods, nodes, services, etc.
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+    # EXPLICITLY NOT INCLUDED (and never add these without a security review):
+    #   verbs: create, update, patch, delete, deletecollection
+    #   resources: secrets, configmaps, deployments, serviceaccounts

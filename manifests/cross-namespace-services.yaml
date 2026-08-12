@@ -1,0 +1,94 @@
+# manifests/cross-namespace-services.yaml
+#
+# THE CROSS-NAMESPACE ROUTING PROBLEM:
+# ──────────────────────────────────────
+# Our IngressRoute lives in the "default" namespace.
+# Our services live in different namespaces (about, projects, blog, contact, proxy, frontend).
+#
+# Standard Kubernetes Ingress can only route to Services in the SAME namespace.
+# Traefik IngressRoute has the same limitation when referencing Services by name.
+#
+# THE SOLUTION: ExternalName Services
+# ─────────────────────────────────────
+# An ExternalName Service is a DNS alias. It creates a Service in namespace A
+# that resolves to a DNS name in namespace B.
+#
+# Kubernetes internal DNS format: <service>.<namespace>.svc.cluster.local
+# So "about.about.svc.cluster.local" is the full DNS name for the "about" Service
+# in the "about" namespace.
+#
+# By creating ExternalName Services in "default", the IngressRoute (also in "default")
+# can route to them, and they transparently forward to the real services.
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: about               # Name the Ingress will reference
+  namespace: default
+spec:
+  type: ExternalName
+  # Full DNS name of the real Service in the "about" namespace
+  externalName: about.about.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: projects
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: projects.projects.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blog
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: blog.blog.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: contact
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: contact.contact.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: proxy.proxy.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: frontend.frontend.svc.cluster.local
+  ports:
+    - port: 80

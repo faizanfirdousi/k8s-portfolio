@@ -1,0 +1,71 @@
+# namespaces.yaml — Declares all Kubernetes namespaces for the portfolio
+#
+# WHY NAMESPACES?
+# Namespaces are like "folders" inside a Kubernetes cluster. They let you:
+#   1. Isolate resources (pods in `about` don't accidentally affect pods in `blog`)
+#   2. Apply NetworkPolicies per-section (Phase 6 hardening)
+#   3. Control RBAC (who can see/do what in each section)
+#   4. Make `kubectl get pods -n about` meaningful — one clean answer per section
+#
+# Each portfolio section gets its own namespace.
+# The proxy and frontend also get their own namespaces.
+
+---
+# The `---` separator lets us put multiple Kubernetes resources in one file.
+# kubectl apply reads them all at once.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: about
+  labels:
+    # Labels are key-value pairs for organizing and selecting resources.
+    # "portfolio-section: about" helps us write NetworkPolicies and selectors later.
+    app.kubernetes.io/part-of: portfolio
+    portfolio-section: "true"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: projects
+  labels:
+    app.kubernetes.io/part-of: portfolio
+    portfolio-section: "true"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blog
+  labels:
+    app.kubernetes.io/part-of: portfolio
+    portfolio-section: "true"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: contact
+  labels:
+    app.kubernetes.io/part-of: portfolio
+    portfolio-section: "true"
+
+---
+# The proxy namespace is separate because the proxy talks to the K8s API.
+# Keeping it isolated makes the security story cleaner.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: proxy
+  labels:
+    app.kubernetes.io/part-of: portfolio
+
+---
+# The frontend is the React app — the shell the user actually sees first.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/part-of: portfolio

@@ -1,0 +1,23 @@
+# manifests/proxy/clusterrolebinding.yaml
+#
+# A ClusterRoleBinding connects:
+#   Subject (who): the "topology-reader" ServiceAccount in the "proxy" namespace
+#   Role (what): the "topology-reader" ClusterRole (read pods + nodes)
+#
+# Without this binding, the ServiceAccount has NO permissions even if the ClusterRole exists.
+# The Role and Binding are always separate objects in Kubernetes RBAC.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topology-reader
+  labels:
+    app.kubernetes.io/part-of: portfolio
+subjects:
+  - kind: ServiceAccount
+    name: topology-reader      # Must match the ServiceAccount name
+    namespace: proxy           # The namespace the ServiceAccount lives in
+roleRef:
+  kind: ClusterRole
+  name: topology-reader        # Must match the ClusterRole name
+  apiGroup: rbac.authorization.k8s.io

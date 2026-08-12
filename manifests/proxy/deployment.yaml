@@ -1,0 +1,70 @@
+# manifests/proxy/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: proxy
+  labels:
+    app: proxy
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: proxy
+
+  template:
+    metadata:
+      labels:
+        app: proxy
+
+    spec:
+      # CRITICAL: Tell Kubernetes which ServiceAccount to run this Pod as.
+      # Without this line, the Pod runs as "default" SA with no permissions.
+      # With it, the Pod gets the "topology-reader" SA token mounted automatically.
+      serviceAccountName: topology-reader
+
+      containers:
+        - name: proxy
+          image: portfolio/proxy:local
+          imagePullPolicy: Never
+
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: PORT
+              value: "8080"
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+
+          resources:
+            requests:
+              memory: "16Mi"    # Go binaries are very memory-efficient
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+
+          # Security hardening: prevent the container from gaining root privileges
+          # runAsUser: 65532 is the numeric UID for the distroless "nonroot" user.
+          # Kubernetes requires a *numeric* UID to verify runAsNonRoot — it cannot
+          # resolve usernames like "nonroot" inside the container filesystem.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532    # distroless nonroot UID
