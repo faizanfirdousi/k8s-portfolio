@@ -1,0 +1,12 @@
+# Mounted into k3s at cluster creation (see k3d-config.yaml volumes).
+# Allows IngressRoute in `default` to route to Services in other namespaces.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true

@@ -12,9 +12,9 @@
 #   5. The Service routes to a healthy Pod
 #
 # Cross-namespace routing:
-#   Services live in different namespaces. Standard Ingress can only route within one namespace.
-#   We solve this with ExternalName Services in default (see cross-namespace-services.yaml)
-#   that alias to the real Services in each section namespace.
+#   Services live in different namespaces. Traefik IngressRoute supports a `namespace`
+#   field on each backend Service — no ExternalName aliases needed.
+#   (Traefik rejects ExternalName services by default.)
 
 ---
 apiVersion: traefik.io/v1alpha1
@@ -76,6 +76,7 @@ spec:
       priority: 20
       services:
         - name: proxy
+          namespace: proxy
           port: 80
 
     - match: PathPrefix(`/about`)
@@ -85,6 +86,7 @@ spec:
         - name: strip-about
       services:
         - name: about
+          namespace: about
           port: 80
 
     - match: PathPrefix(`/projects`)
@@ -94,6 +96,7 @@ spec:
         - name: strip-projects
       services:
         - name: projects
+          namespace: projects
           port: 80
 
     - match: PathPrefix(`/blog`)
@@ -103,6 +106,7 @@ spec:
         - name: strip-blog
       services:
         - name: blog
+          namespace: blog
           port: 80
 
     - match: PathPrefix(`/contact`)
@@ -112,6 +116,7 @@ spec:
         - name: strip-contact
       services:
         - name: contact
+          namespace: contact
           port: 80
 
     - match: PathPrefix(`/`)
@@ -119,4 +124,5 @@ spec:
       priority: 1
       services:
         - name: frontend
+          namespace: frontend
           port: 80

@@ -30,7 +30,8 @@ if k3d cluster list | grep -q "portfolio"; then
 else
   # Create the cluster using our config file
   # The config defines: 1 server + 2 agents, port mapping 8080→80, Traefik enabled
-  k3d cluster create --config "$ROOT_DIR/k3d-config.yaml"
+  k3d cluster create --config "$ROOT_DIR/k3d-config.yaml" \
+    --volume "$ROOT_DIR/manifests/traefik-helm-config.yaml:/var/lib/rancher/k3s/server/manifests/traefik-helm-config.yaml@server:*"
   echo "    Cluster created!"
 fi
 
@@ -41,8 +42,18 @@ kubectl config use-context k3d-portfolio
 
 echo ""
 echo "==> [2/5] Waiting for Traefik ingress controller..."
-# k3s ships Traefik as the default ingress controller — no separate install step.
-# Traefik watches for IngressRoute and Middleware CRDs and configures routing rules.
+# k3s installs Traefik asynchronously via a Helm job after the cluster starts.
+# On a fresh cluster the deployment may not exist yet — wait for it first.
+echo "    Waiting for Traefik to be installed..."
+deadline=$((SECONDS + 120))
+until kubectl get deployment traefik -n kube-system &>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    echo "    ERROR: Traefik deployment did not appear within 120s"
+    exit 1
+  fi
+  sleep 2
+done
+
 echo "    Waiting for Traefik deployment to be ready..."
 kubectl rollout status deployment/traefik \
   --namespace kube-system \
@@ -55,11 +66,19 @@ echo "==> [3/5] Building Docker images..."
 # We tag them with ":local" so we know these are local builds, not pulled from a registry.
 
 SERVICES=(about projects blog contact proxy frontend)
+NODE_SERVICES=(projects blog contact)
 for SERVICE in "${SERVICES[@]}"; do
   echo "    Building portfolio/$SERVICE:local..."
-  docker build \
-    -t "portfolio/$SERVICE:local" \
-    "$ROOT_DIR/services/$SERVICE"
+  if [[ " ${NODE_SERVICES[*]} " == *" ${SERVICE} "* ]]; then
+    docker build \
+      -t "portfolio/$SERVICE:local" \
+      -f "$ROOT_DIR/services/$SERVICE/Dockerfile" \
+      "$ROOT_DIR/services"
+  else
+    docker build \
+      -t "portfolio/$SERVICE:local" \
+      "$ROOT_DIR/services/$SERVICE"
+  fi
 done
 
 echo ""
@@ -92,9 +111,6 @@ kubectl apply -f "$ROOT_DIR/manifests/namespaces.yaml"
 for DIR in about projects blog contact proxy frontend; do
   kubectl apply -f "$ROOT_DIR/manifests/$DIR/"
 done
-
-# Then: ExternalName services in default namespace (bridges IngressRoute → cross-namespace services)
-kubectl apply -f "$ROOT_DIR/manifests/cross-namespace-services.yaml"
 
 # Then: the IngressRoute (routes traffic to services that now exist)
 kubectl apply -f "$ROOT_DIR/manifests/ingress.yaml"

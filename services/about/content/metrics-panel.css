@@ -1,0 +1,89 @@
+
+    .page-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    @media (min-width: 960px) {
+      .page-layout { grid-template-columns: 1fr 280px; }
+      .metrics-panel { position: sticky; top: 1.5rem; }
+    }
+    .metrics-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .metrics-panel__title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .metrics-panel__title:not(:first-child) { margin-top: 1rem; }
+    .metrics-panel__info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .metrics-panel__info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .metrics-panel__info-row .label { color: var(--muted); }
+    .metrics-panel__info-row .value {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      text-align: right;
+      word-break: break-all;
+    }
+    .metrics-panel__info-row .value.accent { color: var(--green); }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.45rem;
+    }
+    .metric-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.45rem 0.35rem;
+      border-radius: 8px;
+      border: 1px dashed rgba(148, 163, 184, 0.25);
+      background: rgba(255, 255, 255, 0.02);
+      text-align: center;
+    }
+    .metric-slot__label {
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .metric-slot__value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0.15rem 0;
+    }
+    .metric-slot__hint {
+      font-size: 0.55rem;
+      color: rgba(148, 163, 184, 0.5);
+    }
+    .metrics-panel__footer {
+      margin-top: 0.85rem;
+      padding-top: 0.65rem;
+      border-top: 1px dashed var(--border);
+      font-size: 0.62rem;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+    }

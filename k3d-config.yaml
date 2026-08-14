@@ -32,12 +32,3 @@ ports:
       - loadbalancer  # "loadbalancer" is the special k3d container that acts as the entry point
 
 image: rancher/k3s:v1.29.2-k3s1  # Pin to a specific k3s version for reproducibility
-
-options:
-  k3s:
-    extraArgs:
-      # Disable k3s servicelb — k3d provides its own load balancer container.
-      # Traefik stays enabled as the built-in ingress controller.
-      - arg: --disable=servicelb
-        nodeFilters:
-          - server:*  # Apply this to all server nodes

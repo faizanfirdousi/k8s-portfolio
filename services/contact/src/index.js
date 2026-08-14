@@ -15,6 +15,7 @@
 'use strict';
 
 const express = require('express');
+const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,7 +26,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // ── HTML template ─────────────────────────────────────────────────────────────
-const PAGE_HTML = `<!DOCTYPE html>
+function contactPageHtml() {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -42,7 +44,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-    .container { max-width: 600px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
     .breadcrumb { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); margin-bottom: 2rem; }
     .breadcrumb span { color: var(--accent2); }
     .pod-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 9999px; padding: 0.25rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 2rem; }
@@ -70,10 +72,13 @@ const PAGE_HTML = `<!DOCTYPE html>
     }
     .submit-btn:hover { opacity: 0.85; }
     .k8s-note { margin-top: 1.5rem; font-size: 0.78rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; text-align: center; }
+    ${metricsPanelCss()}
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="page-layout">
+      <div class="page-main">
     <div class="breadcrumb"><span>~/portfolio</span> / contact</div>
     <div class="pod-badge"><div class="dot"></div>Served by <code>contact-*</code> pod in <code>ns/contact</code></div>
 
@@ -104,9 +109,13 @@ const PAGE_HTML = `<!DOCTYPE html>
         // Submissions are logged to stdout: <code>kubectl logs -n contact deploy/contact</code>
       </p>
     </div>
+      </div>
+      ${renderMetricsPanel('contact')}
+    </div>
   </div>
 </body>
 </html>`;
+}
 
 // Success page shown after a form submission
 function successPage(name) {
@@ -146,7 +155,7 @@ app.get('/healthz', (req, res) => res.status(200).send('ok'));
 // Serve the contact form — handles both /contact (direct) and / (after ingress rewrite)
 app.get(['/', '/contact', '/contact/'], (req, res) => {
   res.setHeader('Content-Type', 'text/html');
-  res.send(PAGE_HTML);
+  res.send(contactPageHtml());
 });
 
 // Handle form submission — both /contact/submit and /submit (after ingress rewrite)

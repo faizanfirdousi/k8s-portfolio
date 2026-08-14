@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { marked } = require('marked');
 const fm = require('front-matter'); // Parses YAML front matter from markdown files
+const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -96,7 +97,7 @@ function pageWrapper(title, content) {
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-    .container { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
     .breadcrumb { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); margin-bottom: 2rem; }
     .breadcrumb a { color: var(--accent2); text-decoration: none; }
     .breadcrumb a:hover { text-decoration: underline; }
@@ -129,11 +130,17 @@ function pageWrapper(title, content) {
     .page-title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
     .page-subtitle { color: var(--muted); margin-bottom: 2.5rem; }
     .section-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent2); margin-bottom: 1.25rem; font-family: 'JetBrains Mono', monospace; }
+    ${metricsPanelCss()}
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="page-layout">
+      <div class="page-main">
     ${content}
+      </div>
+      ${renderMetricsPanel('blog')}
+    </div>
   </div>
 </body>
 </html>`;

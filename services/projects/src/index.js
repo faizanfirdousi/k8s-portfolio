@@ -14,6 +14,7 @@
 
 const express = require('express');
 const fetch = require('node-fetch');
+const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 
 const app = express();
 
@@ -146,7 +147,7 @@ function renderPage(repos) {
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-    .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
     .breadcrumb { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); margin-bottom: 2rem; }
     .breadcrumb span { color: var(--accent2); }
     .pod-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 9999px; padding: 0.25rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 2rem; }
@@ -171,10 +172,13 @@ function renderPage(repos) {
     .updated { font-size: 0.72rem; color: var(--muted); }
     .no-repos { color: var(--muted); font-style: italic; }
     .cache-note { font-size: 0.75rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: -0.5rem; margin-bottom: 1.5rem; }
+    ${metricsPanelCss()}
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="page-layout">
+      <div class="page-main">
     <div class="breadcrumb"><span>~/portfolio</span> / projects</div>
     <div class="pod-badge"><div class="dot"></div>Served by <code>projects-*</code> pod in <code>ns/projects</code></div>
     <h1>Projects</h1>
@@ -186,6 +190,9 @@ function renderPage(repos) {
     <p class="cache-note">Stats cached for 5 minutes to respect GitHub rate limits.</p>
     <div class="repos-grid">
       ${repoCards}
+    </div>
+      </div>
+      ${renderMetricsPanel('projects')}
     </div>
   </div>
 </body>
