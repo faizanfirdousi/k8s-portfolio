@@ -16,7 +16,7 @@
 #
 # This ClusterRole grants EXACTLY what the proxy needs and NOTHING else:
 #   - Verbs: get, list, watch (READ ONLY — no create, update, delete, patch)
-#   - Resources: pods, nodes ONLY (no secrets, configmaps, deployments, etc.)
+#   - Resources: pods, nodes, events ONLY (no secrets, configmaps, deployments, etc.)
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -26,7 +26,7 @@ metadata:
     app.kubernetes.io/part-of: portfolio
 rules:
   - apiGroups: [""]    # "" is the "core" API group — covers pods, nodes, services, etc.
-    resources: ["pods", "nodes"]
+    resources: ["pods", "nodes", "events"]
     verbs: ["get", "list", "watch"]
     # EXPLICITLY NOT INCLUDED (and never add these without a security review):
     #   verbs: create, update, patch, delete, deletecollection

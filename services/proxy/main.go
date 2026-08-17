@@ -2,26 +2,11 @@
 //
 // The cluster-read proxy: the ONLY service allowed to talk to the Kubernetes API.
 //
-// WHAT IT DOES:
-//   1. Uses the ServiceAccount token that Kubernetes automatically mounts into every Pod
-//      to authenticate with the API server (this is called "in-cluster config")
-//   2. Calls the Kubernetes API to list nodes and pods
-//   3. Transforms the response to a MINIMAL schema (no pod specs, no env vars, no secrets)
-//   4. Serves this minimal JSON at GET /api/topology
-//   5. Adds CORS headers so the frontend can call it cross-origin (needed in local dev)
-//
-// SECURITY PROPERTIES:
-//   - The ServiceAccount is bound to a ClusterRole with ONLY get/list/watch on pods+nodes
-//   - We never expose more than: name, namespace, node, status, labels
-//   - The proxy itself has no secrets, no write access, no admin permissions
-//
-// HOW IN-CLUSTER AUTH WORKS:
-//   When Kubernetes creates a Pod, it automatically mounts a ServiceAccount token at:
-//     /var/run/secrets/kubernetes.io/serviceaccount/token
-//   And the cluster's CA certificate at:
-//     /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-//   client-go's `rest.InClusterConfig()` reads these files automatically.
-//   No manual token management required — Kubernetes handles credential rotation.
+// Endpoints:
+//   GET /api/topology              — cluster overview (nodes + enriched pods)
+//   GET /api/pods/:namespace/:name — single pod detail + recent events
+//   GET /api/events?namespace=     — recent events (optional namespace filter)
+//   GET /healthz                   — liveness/readiness (no K8s API call)
 
 package main
 
@@ -32,41 +17,94 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
-	// client-go: the official Kubernetes Go client library
-	// It knows how to talk to the Kubernetes API server
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
+var portfolioNamespaces = map[string]bool{
+	"about":    true,
+	"projects": true,
+	"blog":     true,
+	"contact":  true,
+	"proxy":    true,
+	"frontend": true,
+}
+
 // ── API response types ─────────────────────────────────────────────────────────
-// These are the ONLY fields we expose. We never pass through the full K8s API response.
-// This is intentional — full pod specs can contain environment variable names,
-// image names, and other information that should stay internal.
 
-// NodeInfo represents a single cluster node in the topology response
-type NodeInfo struct {
-	Name     string `json:"name"`     // Node name (e.g., "k3d-portfolio-agent-0")
-	Status   string `json:"status"`   // "Ready" or "NotReady"
-	PodCount int    `json:"podCount"` // Number of pods currently on this node
+type ResourceSummary struct {
+	CPU    string `json:"cpu,omitempty"`
+	Memory string `json:"memory,omitempty"`
 }
 
-// PodInfo represents a single pod in the topology response
+type ContainerInfo struct {
+	Name        string `json:"name"`
+	Ready       bool   `json:"ready"`
+	Restarts    int32  `json:"restarts"`
+	State       string `json:"state"`
+	StateReason string `json:"stateReason,omitempty"`
+	Image       string `json:"image,omitempty"`
+}
+
 type PodInfo struct {
-	Name      string            `json:"name"`      // Pod name (e.g., "about-7c9f4d-xk2p1")
-	Namespace string            `json:"namespace"` // Which namespace it's in
-	Node      string            `json:"node"`      // Which node it's running on
-	Status    string            `json:"status"`    // "Running", "Pending", "CrashLoopBackOff", etc.
-	Labels    map[string]string `json:"labels"`    // Pod labels (used by frontend to identify section)
+	Name             string            `json:"name"`
+	Namespace        string            `json:"namespace"`
+	Node             string            `json:"node"`
+	Status           string            `json:"status"`
+	Labels           map[string]string `json:"labels"`
+	Ready            string            `json:"ready"`
+	Restarts         int32             `json:"restarts"`
+	Age              string            `json:"age"`
+	StartedAt        string            `json:"startedAt,omitempty"`
+	Containers       []ContainerInfo   `json:"containers"`
+	ResourceRequests *ResourceSummary  `json:"resourceRequests,omitempty"`
+	ResourceLimits   *ResourceSummary  `json:"resourceLimits,omitempty"`
 }
 
-// TopologyResponse is the full JSON response for GET /api/topology
+type NodeInfo struct {
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	PodCount int    `json:"podCount"`
+}
+
 type TopologyResponse struct {
-	Nodes     []NodeInfo `json:"nodes"`
-	Pods      []PodInfo  `json:"pods"`
-	FetchedAt string     `json:"fetchedAt"` // ISO timestamp — useful for debugging staleness
+	ClusterName    string     `json:"clusterName"`
+	ClusterVersion string     `json:"clusterVersion"`
+	Nodes          []NodeInfo `json:"nodes"`
+	Pods           []PodInfo  `json:"pods"`
+	FetchedAt      string     `json:"fetchedAt"`
+}
+
+type EventInfo struct {
+	Type      string `json:"type"`
+	Reason    string `json:"reason"`
+	Message   string `json:"message"`
+	Object    string `json:"object"`
+	Namespace string `json:"namespace"`
+	Count     int32  `json:"count"`
+	Age       string  `json:"age"`
+	LastSeen  string  `json:"lastSeen"`
+}
+
+type PodDetailResponse struct {
+	PodInfo
+	Events []EventInfo `json:"events"`
+}
+
+type EventsResponse struct {
+	Events    []EventInfo `json:"events"`
+	FetchedAt string      `json:"fetchedAt"`
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -74,24 +112,15 @@ type TopologyResponse struct {
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // Default port for the proxy service
+		port = "8080"
 	}
 
-	// Build the Kubernetes client using in-cluster configuration.
-	// This only works when the binary is running INSIDE a Kubernetes Pod.
-	// For local testing outside a cluster, you'd use `rest.BuildConfigFromFlags`
-	// with a kubeconfig file instead.
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// If in-cluster config fails, this binary is probably running outside a cluster.
-		// Log the error and exit — the proxy only makes sense inside a cluster.
 		log.Fatalf("[proxy] Failed to build in-cluster config: %v\n"+
 			"Are you running inside a Kubernetes Pod?", err)
 	}
 
-	// Create the Kubernetes clientset — this is what we use to make API calls
-	// A "clientset" contains clients for every API group (core, apps, rbac, etc.)
-	// We only use the core v1 client (for pods and nodes)
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("[proxy] Failed to create Kubernetes client: %v", err)
@@ -100,89 +129,120 @@ func main() {
 	log.Printf("[proxy] Kubernetes client initialized, connected to cluster")
 	log.Printf("[proxy] Listening on port %s", port)
 
-	// ── HTTP server ────────────────────────────────────────────────────────────
-
 	mux := http.NewServeMux()
 
-	// Main topology endpoint
 	mux.HandleFunc("/api/topology", func(w http.ResponseWriter, r *http.Request) {
-		// Only allow GET requests
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		if !allowMethod(w, r, http.MethodGet) {
 			return
 		}
-
-		// CORS headers: allow the frontend (served at a potentially different origin)
-		// to call this endpoint from the browser.
-		// In production (everything behind the same Ingress), this isn't strictly needed
-		// because the frontend and proxy share the same domain. But it's good practice.
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		setCORS(w)
 		w.Header().Set("Content-Type", "application/json")
-
-		// Handle CORS preflight requests (browser sends OPTIONS before the real request)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
 
 		topology, err := fetchTopology(r.Context(), clientset)
 		if err != nil {
 			log.Printf("[proxy] Error fetching topology: %v", err)
-			http.Error(w, `{"error":"Failed to fetch cluster topology"}`, http.StatusInternalServerError)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "Failed to fetch cluster topology"})
+			return
+		}
+		writeJSON(w, http.StatusOK, topology)
+	})
+
+	mux.HandleFunc("/api/events", func(w http.ResponseWriter, r *http.Request) {
+		if !allowMethod(w, r, http.MethodGet) {
+			return
+		}
+		setCORS(w)
+		w.Header().Set("Content-Type", "application/json")
+
+		namespace := r.URL.Query().Get("namespace")
+		if namespace != "" && !portfolioNamespaces[namespace] {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Unknown or disallowed namespace"})
 			return
 		}
 
-		// Encode and write the response
-		if err := json.NewEncoder(w).Encode(topology); err != nil {
-			log.Printf("[proxy] Error encoding response: %v", err)
+		events, err := fetchEvents(r.Context(), clientset, namespace, 30)
+		if err != nil {
+			log.Printf("[proxy] Error fetching events: %v", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "Failed to fetch events"})
+			return
 		}
+
+		writeJSON(w, http.StatusOK, EventsResponse{
+			Events:    events,
+			FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		})
 	})
 
-	// Health check endpoint — must NOT call the K8s API
-	// (if the K8s API is down, our Pod should still be "healthy")
+	mux.HandleFunc("/api/pods/", handlePodDetail(clientset))
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "ok")
 	})
 
-	// Start the HTTP server with a reasonable timeout
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second, // Longer write timeout since we need to call K8s API
+		WriteTimeout: 15 * time.Second,
 	}
 
 	log.Fatal(server.ListenAndServe())
 }
 
-// ── Topology fetch ────────────────────────────────────────────────────────────
+func handlePodDetail(clientset *kubernetes.Clientset) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !allowMethod(w, r, http.MethodGet) {
+			return
+		}
+		setCORS(w)
+		w.Header().Set("Content-Type", "application/json")
 
-// fetchTopology calls the Kubernetes API to get nodes and pods,
-// then transforms them into our minimal TopologyResponse schema.
+		// Path: /api/pods/{namespace}/{name}
+		path := strings.TrimPrefix(r.URL.Path, "/api/pods/")
+		parts := strings.Split(path, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Expected path /api/pods/{namespace}/{name}"})
+			return
+		}
+
+		namespace, name := parts[0], parts[1]
+		if !portfolioNamespaces[namespace] {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "Pod not found"})
+			return
+		}
+
+		detail, err := fetchPodDetail(r.Context(), clientset, namespace, name)
+		if err != nil {
+			log.Printf("[proxy] Error fetching pod %s/%s: %v", namespace, name, err)
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "Pod not found"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, detail)
+	}
+}
+
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
+
 func fetchTopology(ctx context.Context, clientset *kubernetes.Clientset) (*TopologyResponse, error) {
-	// Use a timeout context — we don't want a slow API server to hang the request
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// ── Fetch nodes ────────────────────────────────────────────────────────────
-	// clientset.CoreV1().Nodes().List() calls GET /api/v1/nodes
-	// Our ServiceAccount's ClusterRole allows this (get, list, watch on nodes)
+	clusterVersion := "unknown"
+	if version, err := clientset.Discovery().ServerVersion(); err == nil {
+		clusterVersion = version.GitVersion
+	}
+
 	nodeList, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing nodes: %w", err)
 	}
 
-	// ── Fetch pods (all namespaces) ────────────────────────────────────────────
-	// Passing "" as the namespace means "all namespaces"
-	// This calls GET /api/v1/pods (cluster-wide)
 	podList, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing pods: %w", err)
 	}
 
-	// ── Build pod count per node ───────────────────────────────────────────────
-	// We need this to populate NodeInfo.PodCount
 	podCountByNode := make(map[string]int)
 	for _, pod := range podList.Items {
 		if pod.Spec.NodeName != "" {
@@ -190,14 +250,11 @@ func fetchTopology(ctx context.Context, clientset *kubernetes.Clientset) (*Topol
 		}
 	}
 
-	// ── Transform nodes ────────────────────────────────────────────────────────
 	nodes := make([]NodeInfo, 0, len(nodeList.Items))
 	for _, node := range nodeList.Items {
 		status := "NotReady"
-		// A node is "Ready" when its Ready condition is True
-		// Conditions is a list — iterate to find the "Ready" condition
 		for _, condition := range node.Status.Conditions {
-			if condition.Type == "Ready" && condition.Status == "True" {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
 				status = "Ready"
 				break
 			}
@@ -210,50 +267,327 @@ func fetchTopology(ctx context.Context, clientset *kubernetes.Clientset) (*Topol
 		})
 	}
 
-	// ── Transform pods ────────────────────────────────────────────────────────
-	// Filter out system pods (kube-system, traefik, etc.) —
-	// we only want to show portfolio pods in the topology view.
-	// Also filter out completed/succeeded jobs.
-	portfolioNamespaces := map[string]bool{
-		"about":    true,
-		"projects": true,
-		"blog":     true,
-		"contact":  true,
-		"proxy":    true,
-		"frontend": true,
-	}
-
 	pods := make([]PodInfo, 0)
 	for _, pod := range podList.Items {
-		// Only include pods in our portfolio namespaces
 		if !portfolioNamespaces[pod.Namespace] {
 			continue
 		}
-
-		// Determine pod status — this is more nuanced than just pod.Status.Phase
-		// A pod can be "Running" phase but have a container in CrashLoopBackOff
-		status := string(pod.Status.Phase) // "Running", "Pending", "Failed", "Succeeded"
-
-		// Check container statuses for more detail
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
-				status = cs.State.Waiting.Reason // e.g., "CrashLoopBackOff", "ImagePullBackOff"
-				break
-			}
-		}
-
-		pods = append(pods, PodInfo{
-			Name:      pod.Name,
-			Namespace: pod.Namespace,
-			Node:      pod.Spec.NodeName,
-			Status:    status,
-			Labels:    pod.Labels, // Labels help the frontend know which section this pod belongs to
-		})
+		pods = append(pods, transformPod(&pod, false))
 	}
 
 	return &TopologyResponse{
-		Nodes:     nodes,
-		Pods:      pods,
-		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		ClusterName:    "portfolio-cluster",
+		ClusterVersion: clusterVersion,
+		Nodes:          nodes,
+		Pods:           pods,
+		FetchedAt:      time.Now().UTC().Format(time.RFC3339),
 	}, nil
+}
+
+func fetchPodDetail(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) (*PodDetailResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	eventList, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", name),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing events: %w", err)
+	}
+
+	events := transformEvents(eventList.Items, 20)
+	info := transformPod(pod, true)
+
+	return &PodDetailResponse{
+		PodInfo: info,
+		Events:  events,
+	}, nil
+}
+
+func fetchEvents(ctx context.Context, clientset *kubernetes.Clientset, namespace string, limit int) ([]EventInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var allEvents []corev1.Event
+
+	if namespace != "" {
+		eventList, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, err
+		}
+		allEvents = eventList.Items
+	} else {
+		for ns := range portfolioNamespaces {
+			eventList, err := clientset.CoreV1().Events(ns).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			allEvents = append(allEvents, eventList.Items...)
+		}
+	}
+
+	filtered := make([]corev1.Event, 0, len(allEvents))
+	for _, event := range allEvents {
+		if event.InvolvedObject.Kind == "Pod" && portfolioNamespaces[event.Namespace] {
+			filtered = append(filtered, event)
+		}
+	}
+
+	return transformEvents(filtered, limit), nil
+}
+
+// ── Transform helpers ─────────────────────────────────────────────────────────
+
+func transformPod(pod *corev1.Pod, detailed bool) PodInfo {
+	status := podStatus(pod)
+	ready, restarts := podReadySummary(pod)
+	containers := transformContainers(pod, detailed)
+	startedAt := podStartedAt(pod)
+
+	info := PodInfo{
+		Name:       pod.Name,
+		Namespace:  pod.Namespace,
+		Node:       pod.Spec.NodeName,
+		Status:     status,
+		Labels:     pod.Labels,
+		Ready:      ready,
+		Restarts:   restarts,
+		Age:        formatAge(time.Since(pod.CreationTimestamp.Time)),
+		StartedAt:  startedAt,
+		Containers: containers,
+	}
+
+	if detailed {
+		info.ResourceRequests = aggregateResources(pod.Spec.Containers, func(c corev1.Container) corev1.ResourceList {
+			return c.Resources.Requests
+		})
+		info.ResourceLimits = aggregateResources(pod.Spec.Containers, func(c corev1.Container) corev1.ResourceList {
+			return c.Resources.Limits
+		})
+	}
+
+	return info
+}
+
+func transformContainers(pod *corev1.Pod, includeImage bool) []ContainerInfo {
+	statusByName := make(map[string]corev1.ContainerStatus)
+	for _, cs := range pod.Status.ContainerStatuses {
+		statusByName[cs.Name] = cs
+	}
+
+	containers := make([]ContainerInfo, 0, len(pod.Spec.Containers))
+	for _, spec := range pod.Spec.Containers {
+		ci := ContainerInfo{Name: spec.Name}
+		if includeImage {
+			ci.Image = spec.Image
+		}
+
+		if cs, ok := statusByName[spec.Name]; ok {
+			ci.Ready = cs.Ready
+			ci.Restarts = cs.RestartCount
+			ci.State, ci.StateReason = containerState(cs)
+		} else {
+			ci.State = "Unknown"
+		}
+
+		containers = append(containers, ci)
+	}
+
+	return containers
+}
+
+func transformEvents(events []corev1.Event, limit int) []EventInfo {
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].LastTimestamp.After(events[j].LastTimestamp.Time)
+	})
+
+	if len(events) > limit {
+		events = events[:limit]
+	}
+
+	result := make([]EventInfo, 0, len(events))
+	for _, event := range events {
+		lastSeen := event.LastTimestamp.Time
+		if lastSeen.IsZero() {
+			lastSeen = event.EventTime.Time
+		}
+		if lastSeen.IsZero() {
+			lastSeen = event.CreationTimestamp.Time
+		}
+
+		result = append(result, EventInfo{
+			Type:      event.Type,
+			Reason:    event.Reason,
+			Message:   event.Message,
+			Object:    fmt.Sprintf("%s/%s", event.InvolvedObject.Kind, event.InvolvedObject.Name),
+			Namespace: event.Namespace,
+			Count:     event.Count,
+			Age:       formatAge(time.Since(lastSeen)),
+			LastSeen:  lastSeen.UTC().Format(time.RFC3339),
+		})
+	}
+
+	return result
+}
+
+func podStatus(pod *corev1.Pod) string {
+	status := string(pod.Status.Phase)
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
+			return cs.State.Waiting.Reason
+		}
+	}
+	return status
+}
+
+func podReadySummary(pod *corev1.Pod) (string, int32) {
+	total := len(pod.Spec.Containers)
+	if total == 0 {
+		total = len(pod.Status.ContainerStatuses)
+	}
+
+	readyCount := 0
+	var restarts int32
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Ready {
+			readyCount++
+		}
+		restarts += cs.RestartCount
+	}
+
+	return fmt.Sprintf("%d/%d", readyCount, max(total, len(pod.Status.ContainerStatuses))), restarts
+}
+
+func podStartedAt(pod *corev1.Pod) string {
+	var earliest *time.Time
+
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Running != nil {
+			t := cs.State.Running.StartedAt.Time
+			if !t.IsZero() && (earliest == nil || t.Before(*earliest)) {
+				earliest = &t
+			}
+		}
+	}
+
+	if earliest != nil {
+		return earliest.UTC().Format(time.RFC3339)
+	}
+	if !pod.CreationTimestamp.IsZero() {
+		return pod.CreationTimestamp.UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
+func containerState(cs corev1.ContainerStatus) (string, string) {
+	switch {
+	case cs.State.Running != nil:
+		return "Running", ""
+	case cs.State.Waiting != nil:
+		reason := cs.State.Waiting.Reason
+		if reason == "" {
+			reason = "Waiting"
+		}
+		return reason, reason
+	case cs.State.Terminated != nil:
+		reason := cs.State.Terminated.Reason
+		if reason == "" {
+			reason = "Terminated"
+		}
+		return reason, reason
+	default:
+		return "Unknown", ""
+	}
+}
+
+func aggregateResources(containers []corev1.Container, getList func(corev1.Container) corev1.ResourceList) *ResourceSummary {
+	cpu := resource.NewQuantity(0, resource.DecimalSI)
+	mem := resource.NewQuantity(0, resource.BinarySI)
+	hasCPU, hasMem := false, false
+
+	for _, container := range containers {
+		list := getList(container)
+		if q, ok := list[corev1.ResourceCPU]; ok {
+			cpu.Add(q)
+			hasCPU = true
+		}
+		if q, ok := list[corev1.ResourceMemory]; ok {
+			mem.Add(q)
+			hasMem = true
+		}
+	}
+
+	if !hasCPU && !hasMem {
+		return nil
+	}
+
+	summary := &ResourceSummary{}
+	if hasCPU {
+		summary.CPU = cpu.String()
+	}
+	if hasMem {
+		summary.Memory = mem.String()
+	}
+	return summary
+}
+
+func formatAge(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		if hours == 0 {
+			return fmt.Sprintf("%dd", days)
+		}
+		return fmt.Sprintf("%dd%dh", days, hours)
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// ── HTTP helpers ──────────────────────────────────────────────────────────────
+
+func setCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+}
+
+func allowMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return false
+	}
+	if r.Method != method {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+	return true
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("[proxy] Error encoding response: %v", err)
+	}
 }

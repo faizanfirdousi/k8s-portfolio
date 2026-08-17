@@ -58,14 +58,26 @@ export default function Sidebar({ frontendPod, open, onClose }: SidebarProps) {
               {frontendPod?.name ?? 'frontend-*'}
             </span>
           </div>
+          <div className="dash-sidebar__here-row">
+            <span className="label">Status</span>
+            <span className={`value mono ${frontendPod?.status === 'Running' ? 'accent' : 'warn'}`}>
+              {frontendPod?.status ?? '—'}
+            </span>
+          </div>
+          <div className="dash-sidebar__here-row">
+            <span className="label">Ready</span>
+            <span className="value mono">{frontendPod?.ready ?? '—/—'}</span>
+          </div>
           <div className="metric-slot-grid metric-slot-grid--compact">
             <div className="metric-slot">
-              <span className="metric-slot__label">CPU</span>
-              <span className="metric-slot__placeholder">—</span>
+              <span className="metric-slot__label">Restarts</span>
+              <span className={`metric-slot__value mono ${(frontendPod?.restarts ?? 0) > 0 ? 'warn' : ''}`}>
+                {frontendPod ? frontendPod.restarts : '—'}
+              </span>
             </div>
             <div className="metric-slot">
-              <span className="metric-slot__label">Memory</span>
-              <span className="metric-slot__placeholder">—</span>
+              <span className="metric-slot__label">Age</span>
+              <span className="metric-slot__value mono">{frontendPod?.age ?? '—'}</span>
             </div>
           </div>
         </div>

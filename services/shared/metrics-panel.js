@@ -212,7 +212,7 @@ function renderMetricsPanel(sectionKey, options = {}) {
   const extraMetrics = config.extraMetrics.map((m) => metricSlot(m.label, m.hint)).join('');
 
   return `
-    <aside class="metrics-panel" aria-label="Pod and service metrics">
+    <aside class="metrics-panel" aria-label="Pod and service metrics" data-namespace="${config.namespace}">
       <div class="metrics-panel__title">// Pod info</div>
       <div class="metrics-panel__info">
         <div class="metrics-panel__info-row">
@@ -221,11 +221,11 @@ function renderMetricsPanel(sectionKey, options = {}) {
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Pod</span>
-          <span class="value accent">${podName}</span>
+          <span class="value accent" data-live="pod-name">${podName}</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Status</span>
-          <span class="value accent">${status}</span>
+          <span class="value accent" data-live="pod-status">${status}</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Service</span>
@@ -242,8 +242,8 @@ function renderMetricsPanel(sectionKey, options = {}) {
       <div class="metrics-panel__title">// ${sectionKey} metrics</div>
       <div class="metrics-grid">${extraMetrics}</div>
 
-      <div class="metrics-panel__footer">Metrics wired via Prometheus — coming soon</div>
-    </aside>`;
+      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+    </aside>${metricsLiveScript()}`;
 }
 
 /** Static HTML version for the nginx about page (no process.env). */
@@ -257,7 +257,7 @@ function renderMetricsPanelHtml(sectionKey, podName) {
   const extraMetrics = config.extraMetrics.map((m) => metricSlot(m.label, m.hint)).join('');
 
   return `
-    <aside class="metrics-panel" aria-label="Pod and service metrics">
+    <aside class="metrics-panel" aria-label="Pod and service metrics" data-namespace="${config.namespace}">
       <div class="metrics-panel__title">// Pod info</div>
       <div class="metrics-panel__info">
         <div class="metrics-panel__info-row">
@@ -266,11 +266,11 @@ function renderMetricsPanelHtml(sectionKey, podName) {
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Pod</span>
-          <span class="value accent">${name}</span>
+          <span class="value accent" data-live="pod-name">${name}</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Status</span>
-          <span class="value accent">Running</span>
+          <span class="value accent" data-live="pod-status">Running</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Service</span>
@@ -283,13 +283,67 @@ function renderMetricsPanelHtml(sectionKey, podName) {
       <div class="metrics-grid">${svcMetrics}</div>
       <div class="metrics-panel__title">// ${sectionKey} metrics</div>
       <div class="metrics-grid">${extraMetrics}</div>
-      <div class="metrics-panel__footer">Metrics wired via Prometheus — coming soon</div>
-    </aside>`;
+      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+    </aside>${metricsLiveScript()}`;
+}
+
+/**
+ * Client-side script that fetches /api/topology and populates live data
+ * into the metrics panel. Injected once per page via the render functions.
+ */
+function metricsLiveScript() {
+  return `
+    <script>
+    (function() {
+      var panel = document.querySelector('.metrics-panel[data-namespace]');
+      if (!panel) return;
+      var ns = panel.getAttribute('data-namespace');
+
+      function update() {
+        fetch('/api/topology')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data || !data.pods) return;
+            var pod = data.pods.find(function(p) { return p.namespace === ns; });
+            if (!pod) return;
+
+            // Pod info
+            var nameEl = panel.querySelector('[data-live="pod-name"]');
+            var statusEl = panel.querySelector('[data-live="pod-status"]');
+            if (nameEl) nameEl.textContent = pod.name;
+            if (statusEl) {
+              statusEl.textContent = pod.status;
+              statusEl.className = 'value ' + (pod.status === 'Running' ? 'accent' : '');
+            }
+
+            // Pod metrics slots
+            var slots = panel.querySelectorAll('.metric-slot');
+            slots.forEach(function(slot) {
+              var label = slot.querySelector('.metric-slot__label');
+              var value = slot.querySelector('.metric-slot__value');
+              if (!label || !value) return;
+              var key = label.textContent.trim().toLowerCase();
+              if (key === 'restarts') {
+                value.textContent = pod.restarts;
+                value.style.color = pod.restarts > 0 ? '#f97316' : '';
+              } else if (key === 'uptime') {
+                value.textContent = pod.age || '—';
+              }
+            });
+          })
+          .catch(function() { /* silent */ });
+      }
+
+      update();
+      setInterval(update, 10000);
+    })();
+    <\/script>`;
 }
 
 module.exports = {
   metricsPanelCss,
   renderMetricsPanel,
   renderMetricsPanelHtml,
+  metricsLiveScript,
   SECTIONS,
 };

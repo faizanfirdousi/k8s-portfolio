@@ -651,8 +651,48 @@ body {
 
 .arch-stack__metrics {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.35rem;
   justify-content: center;
+}
+
+.arch-stack__metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.arch-stack__metric-label {
+  font-size: 0.5rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.arch-stack__metric-value {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.arch-stack__block--clickable {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.arch-stack__block--clickable:hover .arch-stack__block-face,
+.arch-stack__block--clickable:focus-visible .arch-stack__block-face {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 4px 20px var(--accent-primary-glow) !important;
+}
+
+.arch-stack__block--clickable:hover {
+  transform: translateY(-2px);
+}
+
+.arch-stack__block--clickable:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Namespace colors */
@@ -875,7 +915,7 @@ body {
 
 .terminal-row {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 0.5fr 0.7fr;
+  grid-template-columns: 1fr 1.2fr 0.5fr 0.7fr 0.6fr 0.5fr;
   gap: 0.25rem;
   padding: 0.15rem 0;
   color: var(--text-muted);
@@ -888,8 +928,33 @@ body {
   padding-bottom: 0.25rem;
 }
 
+.terminal-row--clickable {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.terminal-row--clickable:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.terminal-row--clickable:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 1px;
+  background: rgba(99, 102, 241, 0.06);
+}
+
 .terminal-row--placeholder {
   opacity: 0.5;
+}
+
+.terminal-col--extra {
+  /* visible by default, hidden on mobile via media query */
+}
+
+.dash-metrics__activity-age {
+  font-size: 0.7em;
+  color: var(--text-dim);
 }
 
 .dash-metrics__terminal-stats {
@@ -1117,6 +1182,10 @@ body {
   .terminal-row span:nth-child(4),
   .terminal-row--head span:nth-child(3),
   .terminal-row--head span:nth-child(4) {
+    display: none;
+  }
+
+  .terminal-col--extra {
     display: none;
   }
 }

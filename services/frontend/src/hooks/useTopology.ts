@@ -1,23 +1,7 @@
 import { useEffect, useState } from 'react';
+import type { TopologyData } from '../types/topology';
 
-export interface TopologyNode {
-  name: string;
-  status: string;
-  podCount: number;
-}
-
-export interface TopologyPod {
-  name: string;
-  namespace: string;
-  node: string;
-  status: string;
-}
-
-export interface TopologyData {
-  nodes: TopologyNode[];
-  pods: TopologyPod[];
-  fetchedAt: string;
-}
+export type { TopologyData, TopologyNode, TopologyPod } from '../types/topology';
 
 export function useTopology(pollMs = 5000) {
   const [data, setData] = useState<TopologyData | null>(null);

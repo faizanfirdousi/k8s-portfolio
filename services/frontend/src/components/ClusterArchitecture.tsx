@@ -1,8 +1,9 @@
-import MetricPlaceholder from './MetricPlaceholder';
 import type { TopologyPod } from '../hooks/useTopology';
+import type { PodRef } from '../types/topology';
 
 interface ClusterArchitectureProps {
   pods: TopologyPod[];
+  onPodClick: (ref: PodRef) => void;
 }
 
 interface StackProps {
@@ -11,11 +12,19 @@ interface StackProps {
   label: string;
   pod?: TopologyPod;
   highlighted?: boolean;
+  onPodClick?: (ref: PodRef) => void;
 }
 
-function NamespaceStack({ ns, color, label, pod, highlighted }: StackProps) {
+function NamespaceStack({ ns, color, label, pod, highlighted, onPodClick }: StackProps) {
   const podName = pod?.name ?? `${ns}-pod`;
-  const status = pod?.status ?? 'Running';
+  const status = pod?.status ?? 'Pending';
+  const ready = pod?.ready ?? '—/—';
+
+  const handleClick = () => {
+    if (pod && onPodClick) {
+      onPodClick({ namespace: pod.namespace, name: pod.name });
+    }
+  };
 
   return (
     <div className={`arch-stack arch-stack--${color} ${highlighted ? 'arch-stack--highlight' : ''}`}>
@@ -24,17 +33,33 @@ function NamespaceStack({ ns, color, label, pod, highlighted }: StackProps) {
         <span className="arch-stack__ns-name mono">{label}</span>
       </div>
 
-      <div className="arch-stack__block arch-stack__block--pod">
+      <div
+        className={`arch-stack__block arch-stack__block--pod ${pod ? 'arch-stack__block--clickable' : ''}`}
+        onClick={handleClick}
+        role={pod ? 'button' : undefined}
+        tabIndex={pod ? 0 : undefined}
+        onKeyDown={pod ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleClick();
+        } : undefined}
+      >
         <div className="arch-stack__block-top" />
         <div className="arch-stack__block-face">
           <span className="arch-stack__block-type">pod</span>
           <span className="arch-stack__block-name mono">{podName.slice(0, 16)}</span>
           <span className={`arch-stack__status ${status === 'Running' ? 'running' : ''}`}>
-            {status === 'Running' ? '1/1 Running' : status}
+            {ready} {status}
           </span>
           <div className="arch-stack__metrics">
-            <MetricPlaceholder label="CPU" variant="block" />
-            <MetricPlaceholder label="Mem" variant="block" />
+            <div className="arch-stack__metric-item">
+              <span className="arch-stack__metric-label">Restarts</span>
+              <span className={`arch-stack__metric-value mono ${(pod?.restarts ?? 0) > 0 ? 'warn' : ''}`}>
+                {pod ? pod.restarts : '—'}
+              </span>
+            </div>
+            <div className="arch-stack__metric-item">
+              <span className="arch-stack__metric-label">Age</span>
+              <span className="arch-stack__metric-value mono">{pod?.age ?? '—'}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -47,10 +72,6 @@ function NamespaceStack({ ns, color, label, pod, highlighted }: StackProps) {
           <span className="arch-stack__block-type">svc</span>
           <span className="arch-stack__block-name mono">{ns}-svc</span>
           <span className="arch-stack__status running">ClusterIP</span>
-          <div className="arch-stack__metrics">
-            <MetricPlaceholder label="Req/s" variant="block" />
-            <MetricPlaceholder label="Latency" variant="block" />
-          </div>
         </div>
       </div>
     </div>
@@ -64,7 +85,7 @@ const SECTIONS = [
   { ns: 'contact', color: 'orange', label: 'contact' },
 ];
 
-export default function ClusterArchitecture({ pods }: ClusterArchitectureProps) {
+export default function ClusterArchitecture({ pods, onPodClick }: ClusterArchitectureProps) {
   const podByNs = Object.fromEntries(
     SECTIONS.map(({ ns }) => [ns, pods.find((p) => p.namespace === ns)])
   );
@@ -101,11 +122,6 @@ export default function ClusterArchitecture({ pods }: ClusterArchitectureProps) 
           <span className="arch-ingress__label">ingress</span>
           <span className="arch-ingress__name mono">traefik</span>
           <span className="arch-ingress__status running">Running</span>
-          <div className="arch-ingress__metrics">
-            <MetricPlaceholder label="RPS" />
-            <MetricPlaceholder label="P99" />
-            <MetricPlaceholder label="Errors" />
-          </div>
         </div>
       </div>
 
@@ -117,6 +133,7 @@ export default function ClusterArchitecture({ pods }: ClusterArchitectureProps) 
             color={color}
             label={label}
             pod={podByNs[ns]}
+            onPodClick={onPodClick}
           />
         ))}
       </div>
@@ -127,6 +144,7 @@ export default function ClusterArchitecture({ pods }: ClusterArchitectureProps) 
           color="red"
           label="proxy"
           pod={proxyPod}
+          onPodClick={onPodClick}
         />
 
         <div className="arch-you-are-here">
@@ -149,6 +167,7 @@ export default function ClusterArchitecture({ pods }: ClusterArchitectureProps) 
           label="frontend"
           pod={frontendPod}
           highlighted
+          onPodClick={onPodClick}
         />
       </div>
     </div>

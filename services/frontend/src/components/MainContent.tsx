@@ -1,13 +1,15 @@
 import { MapPin, Briefcase, BookOpen } from 'lucide-react';
 import ClusterArchitecture from './ClusterArchitecture';
 import type { TopologyPod } from '../hooks/useTopology';
+import type { PodRef } from '../types/topology';
 
 interface MainContentProps {
   pods: TopologyPod[];
   clusterHealthy: boolean;
+  onPodClick: (ref: PodRef) => void;
 }
 
-export default function MainContent({ pods, clusterHealthy }: MainContentProps) {
+export default function MainContent({ pods, clusterHealthy, onPodClick }: MainContentProps) {
   return (
     <main className="dash-main">
       <section className="dash-main__hero">
@@ -40,7 +42,7 @@ export default function MainContent({ pods, clusterHealthy }: MainContentProps) 
       </section>
 
       <section className="dash-main__diagram glass-panel">
-        <ClusterArchitecture pods={pods} />
+        <ClusterArchitecture pods={pods} onPodClick={onPodClick} />
       </section>
 
       <blockquote className="dash-main__quote glass-panel">
