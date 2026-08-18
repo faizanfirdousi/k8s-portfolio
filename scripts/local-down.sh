@@ -18,7 +18,7 @@ echo ""
 echo "==> Removing local Docker images..."
 # Remove the images we built — this is optional.
 # Comment this out if you want to keep the images to avoid rebuilding next time.
-SERVICES=(about projects blog contact proxy frontend)
+SERVICES=(about projects skills blog contact proxy frontend)
 for SERVICE in "${SERVICES[@]}"; do
   docker rmi "portfolio/$SERVICE:local" 2>/dev/null || echo "    (portfolio/$SERVICE:local not found — skipping)"
 done

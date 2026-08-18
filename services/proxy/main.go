@@ -31,6 +31,7 @@ import (
 var portfolioNamespaces = map[string]bool{
 	"about":    true,
 	"projects": true,
+	"skills":   true,
 	"blog":     true,
 	"contact":  true,
 	"proxy":    true,

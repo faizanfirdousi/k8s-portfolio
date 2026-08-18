@@ -3,23 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Faizan Firdousi — DevOps and Platform Engineer specializing in Kubernetes, cloud infrastructure, and automation." />
+  <meta name="description" content="Faizan Firdousi — Cloud Engineer & Go Developer from Pune. Building cloud infrastructure, backend systems in Go, and learning AI." />
   <title>Faizan Firdousi | About</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     /* ─── Design tokens ─── */
     :root {
-      --bg:         #0a0e1a;      /* near-black navy background */
-      --surface:    #111827;      /* slightly lighter surface for cards */
-      --border:     #1f2937;      /* subtle border */
-      --accent:     #6366f1;      /* indigo accent — primary brand color */
-      --accent2:    #06b6d4;      /* cyan — secondary accent for highlights */
-      --text:       #f1f5f9;      /* near-white text */
-      --muted:      #94a3b8;      /* gray for secondary text */
-      --green:      #10b981;      /* for "Running" status badges */
-      --tag-bg:     #1e293b;
+      --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+      --accent: #4f46e5; --accent2: #0891b2; --text: #0f172a;
+      --muted: #64748b; --green: #059669; --tag-bg: #f1f5f9;
     }
+    .dark {
+      --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
+      --accent: #6366f1; --accent2: #06b6d4; --text: #f1f5f9;
+      --muted: #94a3b8; --green: #10b981; --tag-bg: #1e293b;
+    }
+    .theme-toggle {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+    }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .dark .sun-icon { display: none; }
+    .dark .moon-icon { display: block; }
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -347,6 +370,10 @@
     }  </style>
 </head>
 <body>
+  <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
+    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
   <div class="container">
     <div class="page-layout">
       <div class="page-main">
@@ -365,20 +392,31 @@
     <!-- Hero Section -->
     <section class="hero">
       <h1>Hi, I'm <span class="accent">Faizan</span><br/>Firdousi.</h1>
-      <p class="role">$ whoami → DevOps / Platform Engineer</p>
+      <p class="role">$ whoami → Cloud Engineer &amp; Go Developer</p>
       <p class="tagline">
-        I build the infrastructure that lets teams ship fast without things falling apart.
-        Kubernetes, automation, observability — that's my stack.
+        Cloud Engineer and Go Developer based in Pune. Building reliable cloud infrastructure,
+        crafting backend systems in Go, and exploring AI applications.
       </p>
 
       <!-- Social links -->
       <div class="socials">
         <a href="https://github.com/faizanfirdousi" class="social-link" target="_blank" rel="noopener">
-          <!-- GitHub SVG icon -->
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
           </svg>
           GitHub
+        </a>
+        <a href="https://dev.to/faizanfirdousi" class="social-link" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7.42 10.05c-.18-.12-.46-.23-.84-.23H5.32v4.36h1.26c.38 0 .66-.11.84-.23.28-.18.43-.52.43-.95v-2c0-.43-.15-.77-.43-.95zm-1.05 3.34h-.35v-2.37h.35c.38 0 .58.26.58.79v.79c0 .53-.2.79-.58.79zM0 3v18h24V3H0zm8.56 10.95c0 .76-.32 1.34-.95 1.74-.47.3-.99.42-1.74.42H3.88V7.89h2c.75 0 1.27.12 1.74.42.63.4.95.98.95 1.74v3.9zm5.54-3.08h-2.1v1.12h1.61v1.46H12V14.5h2.2v1.61h-3.81V7.89H14.1v1.98zm6.02 5.24l-1.39-4.88h-.04l-1.39 4.88h-1.84l-1.46-8.22h1.83l.79 5.34h.04l1.32-5.34h1.42l1.32 5.34h.04l.79-5.34h1.83l-1.46 8.22h-1.88z"/>
+          </svg>
+          DEV.to
+        </a>
+        <a href="https://twitter.com/codoyevskyy" class="social-link" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+          Twitter / X
         </a>
         <a href="https://linkedin.com/in/faizanfirdousi" class="social-link" target="_blank" rel="noopener">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -393,85 +431,86 @@
     <div class="section-title">// About me</div>
     <div class="about-text">
       <p>
-        I'm a DevOps and Platform Engineer passionate about making infrastructure
-        invisible — meaning it "just works" for the developers using it. I specialize
-        in building reliable, automated, and observable systems on top of Kubernetes and
-        cloud platforms.
+        I'm a Computer Science student at <strong>International Institute of Information Technology (I²IT), Pune</strong> with a keen interest in Cloud Engineering, Go development, and artificial intelligence.
       </p>
       <p>
-        This portfolio itself runs on a real Kubernetes cluster. Each section you visit
-        is a live Pod. The topology view shows you exactly what's running behind the scenes.
-        It's not a diagram — it's the actual system.
+        I love learning how systems work underneath and building projects from the ground up — whether that is crafting container runtimes in Go, creating cloud services with automated CI/CD pipelines, or integrating AI into interactive applications.
       </p>
       <p>
-        When I'm not writing YAML or debugging CrashLoopBackOffs, I'm writing about platform
-        engineering, contributing to open source, and thinking about how to make complex
-        systems easier for humans to reason about.
+        This portfolio itself runs on an actual Kubernetes cluster where every page and section is powered by its own live Pod.
       </p>
     </div>
 
     <!-- Skills grid -->
-    <div class="section-title">// Skills & tools</div>
+    <div class="section-title">// Skills &amp; tools</div>
     <div class="skills-grid">
       <div class="skill-card">
-        <div class="skill-name">Kubernetes</div>
-        <div class="skill-desc">k3s, k3d, EKS, GKE, AKS, Helm, Operators</div>
+        <div class="skill-name">Languages</div>
+        <div class="skill-desc">Go, Python, C, JavaScript, TypeScript, Bash</div>
       </div>
       <div class="skill-card">
-        <div class="skill-name">Infrastructure as Code</div>
-        <div class="skill-desc">Terraform, Pulumi, Ansible, Crossplane</div>
+        <div class="skill-name">Cloud &amp; Infrastructure</div>
+        <div class="skill-desc">AWS, DigitalOcean, Terraform, Cloud Architecture</div>
       </div>
       <div class="skill-card">
-        <div class="skill-name">CI/CD</div>
-        <div class="skill-desc">GitHub Actions, ArgoCD, Tekton, Flux</div>
+        <div class="skill-name">Containers &amp; Orchestration</div>
+        <div class="skill-desc">Kubernetes, k3s, k3d, Docker, Helm</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name">DevOps &amp; CI/CD</div>
+        <div class="skill-desc">GitHub Actions, Linux Systems, Traefik</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name">Databases &amp; Caching</div>
+        <div class="skill-desc">PostgreSQL, Redis</div>
       </div>
       <div class="skill-card">
         <div class="skill-name">Observability</div>
-        <div class="skill-desc">Prometheus, Grafana, Loki, OpenTelemetry</div>
+        <div class="skill-desc">Prometheus, Grafana, Loki</div>
       </div>
       <div class="skill-card">
-        <div class="skill-name">Cloud Platforms</div>
-        <div class="skill-desc">AWS, GCP, Azure — multi-cloud architectures</div>
+        <div class="skill-name">AI &amp; Applications</div>
+        <div class="skill-desc">RAG, AI Integration, LLM Tooling</div>
       </div>
       <div class="skill-card">
-        <div class="skill-name">Languages</div>
-        <div class="skill-desc">Go, Python, Bash — tools, scripts, operators</div>
-      </div>
-      <div class="skill-card">
-        <div class="skill-name">Networking</div>
-        <div class="skill-desc">CNI plugins, service mesh (Istio, Linkerd)</div>
-      </div>
-      <div class="skill-card">
-        <div class="skill-name">Security</div>
-        <div class="skill-desc">RBAC, OPA/Gatekeeper, Falco, Vault</div>
+        <div class="skill-name">Core Systems</div>
+        <div class="skill-desc">Linux, Operating Systems, Networking</div>
       </div>
     </div>
 
-    <!-- Experience timeline -->
-    <div class="section-title">// Experience</div>
+    <!-- Experience & Education timeline -->
+    <div class="section-title">// Education &amp; Milestones</div>
     <div class="timeline">
       <div class="timeline-item">
-        <div class="timeline-dot">▲</div>
+        <div class="timeline-dot">🎓</div>
         <div class="timeline-content">
-          <div class="company">Platform Engineer — [Company Name]</div>
-          <div class="period">2023 – Present</div>
-          <div class="desc">Designed and maintained multi-tenant Kubernetes platform. Reduced deployment lead time by 60% through GitOps automation.</div>
+          <div class="company">International Institute of Information Technology (I²IT), Pune</div>
+          <div class="period">B.E. in Computer Science</div>
+          <div class="desc">Pursuing Bachelor of Engineering in Computer Science. Focused on cloud computing, systems programming, and modern software development.</div>
         </div>
       </div>
       <div class="timeline-item">
-        <div class="timeline-dot">▲</div>
+        <div class="timeline-dot">⚡</div>
         <div class="timeline-content">
-          <div class="company">DevOps Engineer — [Company Name]</div>
-          <div class="period">2021 – 2023</div>
-          <div class="desc">Migrated monolith to microservices on Kubernetes. Built observability stack from scratch with Prometheus + Grafana + Loki.</div>
+          <div class="company">Container From Scratch in Go</div>
+          <div class="period">Systems Project</div>
+          <div class="desc">Built an isolated container runtime in Go utilizing Linux namespaces, chroot, and cgroup v2 for process isolation and CPU/memory/PID resource limits.</div>
         </div>
       </div>
       <div class="timeline-item">
-        <div class="timeline-dot">▲</div>
+        <div class="timeline-dot">☁️</div>
         <div class="timeline-content">
-          <div class="company">Infrastructure Engineer — [Company Name]</div>
-          <div class="period">2019 – 2021</div>
-          <div class="desc">Managed bare-metal and cloud infrastructure. Automated provisioning with Terraform and Ansible.</div>
+          <div class="company">Cloud URL Shortener &amp; CI/CD Pipeline</div>
+          <div class="period">Cloud &amp; DevOps Project</div>
+          <div class="desc">Engineered a URL shortener service with Go, PostgreSQL, and Redis, deployed on AWS EC2 with Docker Compose and automated GitHub Actions CI/CD.</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot">🤖</div>
+        <div class="timeline-content">
+          <div class="company">AI Detective Game</div>
+          <div class="period">AI &amp; Cloud Project</div>
+          <div class="desc">Created an AI-powered case investigation app on DigitalOcean featuring RAG-backed witness chat, dynamic evidence boards, and deduction mechanics.</div>
         </div>
       </div>
     </div>
@@ -555,5 +594,24 @@
     </aside>
     </div><!-- /.page-layout -->
   </div>
+  <script>
+    const toggleBtn = document.getElementById('theme-toggle-btn');
+    const root = document.documentElement;
+    const currentTheme = localStorage.getItem('portfolio-theme');
+    if (currentTheme === 'dark') { root.classList.add('dark'); }
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        root.classList.toggle('dark');
+        const isDark = root.classList.contains('dark');
+        localStorage.setItem('portfolio-theme', isDark ? 'dark' : 'light');
+      });
+    }
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'portfolio-theme') {
+        if (e.newValue === 'dark') { root.classList.add('dark'); }
+        else { root.classList.remove('dark'); }
+      }
+    });
+  </script>
 </body>
 </html>

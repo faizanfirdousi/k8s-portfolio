@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Faizan Firdousi | Skills</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+      --accent: #0f766e; --text: #0f172a; --muted: #64748b; --green: #059669;
+    }
+    .dark {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --border: #1f2937;
+      --accent: #14b8a6;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --green: #10b981;
+    }
+    .theme-toggle {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+    }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .dark .sun-icon { display: none; }
+    .dark .moon-icon { display: block; }
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .breadcrumb {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .pod-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 0.25rem 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .pod-badge .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+    }
+    h1 { font-size: 2.25rem; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2.5rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 6px;
+      background: rgba(20, 184, 166, 0.12);
+      border: 1px solid rgba(20, 184, 166, 0.25);
+      color: #99f6e4;
+    }
+    .back { margin-top: 2.5rem; }
+    .back a {
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
+    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="/">k8s.dev</a> / skills namespace / pod
+    </nav>
+
+    <div class="pod-badge">
+      <span class="dot"></span>
+      namespace: skills · served by nginx pod
+    </div>
+
+    <h1>Skills</h1>
+    <p class="subtitle">Tools and platforms I work with day to day.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Languages</h2>
+        <div class="tags">
+          <span class="tag">Go (Golang)</span>
+          <span class="tag">Python</span>
+          <span class="tag">C</span>
+          <span class="tag">JavaScript</span>
+          <span class="tag">TypeScript</span>
+          <span class="tag">Bash</span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Cloud &amp; Containers</h2>
+        <div class="tags">
+          <span class="tag">Kubernetes</span>
+          <span class="tag">k3s / k3d</span>
+          <span class="tag">Docker</span>
+          <span class="tag">AWS</span>
+          <span class="tag">DigitalOcean</span>
+          <span class="tag">Terraform</span>
+          <span class="tag">Helm</span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Databases &amp; Caching</h2>
+        <div class="tags">
+          <span class="tag">PostgreSQL</span>
+          <span class="tag">Redis</span>
+          <span class="tag">SQL</span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>DevOps &amp; Observability</h2>
+        <div class="tags">
+          <span class="tag">GitHub Actions</span>
+          <span class="tag">CI/CD</span>
+          <span class="tag">Prometheus</span>
+          <span class="tag">Grafana</span>
+          <span class="tag">Loki</span>
+          <span class="tag">Traefik</span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>AI &amp; Applications</h2>
+        <div class="tags">
+          <span class="tag">RAG</span>
+          <span class="tag">AI Integration</span>
+          <span class="tag">LLM Tooling</span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Systems &amp; Architecture</h2>
+        <div class="tags">
+          <span class="tag">Linux Systems</span>
+          <span class="tag">Operating Systems</span>
+          <span class="tag">Networking &amp; TLS</span>
+        </div>
+      </section>
+    </div>
+
+    <p class="back"><a href="/">← Back to cluster dashboard</a></p>
+  </div>
+  <script>
+    const toggleBtn = document.getElementById('theme-toggle-btn');
+    const root = document.documentElement;
+    const currentTheme = localStorage.getItem('portfolio-theme');
+    if (currentTheme === 'dark') { root.classList.add('dark'); }
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        root.classList.toggle('dark');
+        const isDark = root.classList.contains('dark');
+        localStorage.setItem('portfolio-theme', isDark ? 'dark' : 'light');
+      });
+    }
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'portfolio-theme') {
+        if (e.newValue === 'dark') { root.classList.add('dark'); }
+        else { root.classList.remove('dark'); }
+      }
+    });
+  </script>
+</body>
+</html>

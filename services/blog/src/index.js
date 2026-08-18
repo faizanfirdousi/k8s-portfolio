@@ -91,10 +91,39 @@ function pageWrapper(title, content) {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
+      --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+      --accent: #4f46e5; --accent2: #0891b2; --text: #0f172a;
+      --muted: #64748b; --green: #059669; --tag-bg: #f1f5f9;
+    }
+    .dark {
       --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
       --accent: #6366f1; --accent2: #06b6d4; --text: #f1f5f9;
       --muted: #94a3b8; --green: #10b981; --tag-bg: #1e293b;
     }
+    .theme-toggle {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+    }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .dark .sun-icon { display: none; }
+    .dark .moon-icon { display: block; }
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
@@ -134,6 +163,15 @@ function pageWrapper(title, content) {
   </style>
 </head>
 <body>
+  <script>
+    // Inline script to prevent flash of incorrect theme
+    const currentTheme = localStorage.getItem('portfolio-theme');
+    if (currentTheme === 'dark') { document.documentElement.classList.add('dark'); }
+  </script>
+  <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
+    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
   <div class="container">
     <div class="page-layout">
       <div class="page-main">
@@ -142,6 +180,23 @@ function pageWrapper(title, content) {
       ${renderMetricsPanel('blog')}
     </div>
   </div>
+  <script>
+    const toggleBtn = document.getElementById('theme-toggle-btn');
+    const root = document.documentElement;
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        root.classList.toggle('dark');
+        const isDark = root.classList.contains('dark');
+        localStorage.setItem('portfolio-theme', isDark ? 'dark' : 'light');
+      });
+    }
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'portfolio-theme') {
+        if (e.newValue === 'dark') { root.classList.add('dark'); }
+        else { root.classList.remove('dark'); }
+      }
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -154,7 +209,7 @@ app.get(['/', '/blog', '/blog/'], (req, res) => {
     <div class="breadcrumb"><a href="/">~/portfolio</a> / blog</div>
     <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
     <h1 class="page-title">Blog</h1>
-    <p class="page-subtitle">Writing about platform engineering, Kubernetes, and building reliable systems.</p>
+    <p class="page-subtitle">Writing about cloud engineering, Go, systems programming, and Kubernetes.</p>
     <div class="section-title">// ${posts.length} post${posts.length !== 1 ? 's' : ''}</div>
     <div class="post-list">
       ${posts.length > 0

@@ -52,7 +52,15 @@ metadata:
     portfolio-section: "true"
 
 ---
-# The proxy namespace is separate because the proxy talks to the K8s API.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skills
+  labels:
+    app.kubernetes.io/part-of: portfolio
+    portfolio-section: "true"
+
+---
 # Keeping it isolated makes the security story cleaner.
 apiVersion: v1
 kind: Namespace

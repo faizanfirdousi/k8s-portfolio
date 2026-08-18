@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skills
+  namespace: skills
+  labels:
+    app: skills
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: skills
+  template:
+    metadata:
+      labels:
+        app: skills
+        portfolio-section: skills
+    spec:
+      containers:
+        - name: skills
+          image: portfolio/skills:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"

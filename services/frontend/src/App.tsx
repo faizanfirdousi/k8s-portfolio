@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
@@ -10,46 +10,60 @@ import { usePodDetail } from './hooks/usePodDetail';
 import { useEvents } from './hooks/useEvents';
 import type { PodRef } from './types/topology';
 
+type View = 'cluster' | 'table';
+
 function App() {
   const { data, error, lastUpdated, frontendPod } = useTopology();
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPod, setSelectedPod] = useState<PodRef | null>(null);
+  const [view, setView] = useState<View>('cluster');
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('portfolio-theme');
+    return savedTheme ? savedTheme === 'dark' : false;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('portfolio-theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   const { detail, loading: podLoading, error: podError } = usePodDetail(selectedPod);
   const { events } = useEvents();
 
-  const handlePodClick = (ref: PodRef) => setSelectedPod(ref);
-  const handleDrawerClose = () => setSelectedPod(null);
-
   return (
-    <div className="dash-shell">
-      <div className="bg-glow" />
-      <div className="bg-grid" />
-
+    <div className="app-shell flex min-h-screen flex-col bg-zinc-50">
       <Header
         clusterOnline={!error && !!data}
         menuOpen={menuOpen}
         onMenuToggle={() => setMenuOpen((v) => !v)}
+        view={view}
+        onViewChange={setView}
+        darkMode={darkMode}
+        onThemeToggle={() => setDarkMode((value) => !value)}
       />
       <MobileNav />
 
-      <div className="dash-body">
+      <div className="flex flex-1 flex-col xl:flex-row xl:overflow-hidden">
         <Sidebar
           frontendPod={frontendPod}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
+          pods={data?.pods ?? []}
         />
         <MainContent
           pods={data?.pods ?? []}
           clusterHealthy={!error && !!data}
-          onPodClick={handlePodClick}
+          onPodClick={setSelectedPod}
+          view={view}
+          onViewChange={setView}
+          darkMode={darkMode}
         />
         <MetricsPanel
           data={data}
           error={error}
           lastUpdated={lastUpdated}
           events={events}
-          onPodClick={handlePodClick}
+          onPodClick={setSelectedPod}
         />
       </div>
 
@@ -58,7 +72,7 @@ function App() {
         detail={detail}
         loading={podLoading}
         error={podError}
-        onClose={handleDrawerClose}
+        onClose={() => setSelectedPod(null)}
       />
     </div>
   );

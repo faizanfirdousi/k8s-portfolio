@@ -24,9 +24,14 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"   # the repo root (one level up from scripts
 echo "==> [1/5] Creating k3d cluster..."
 
 # Check if a cluster named "portfolio" already exists
-# `k3d cluster list -o json` outputs JSON; we grep for the cluster name
 if k3d cluster list | grep -q "portfolio"; then
-  echo "    Cluster 'portfolio' already exists — skipping creation"
+  # Cluster exists — make sure it is actually running (not just present on disk).
+  if ! k3d cluster list | grep -E '^portfolio' | grep -q '1/1'; then
+    echo "    Cluster 'portfolio' exists but is stopped — starting it..."
+    k3d cluster start portfolio
+  else
+    echo "    Cluster 'portfolio' already running — skipping creation"
+  fi
 else
   # Create the cluster using our config file
   # The config defines: 1 server + 2 agents, port mapping 8080→80, Traefik enabled
@@ -65,7 +70,7 @@ echo "==> [3/5] Building Docker images..."
 # The image name format is: portfolio/<service-name>:local
 # We tag them with ":local" so we know these are local builds, not pulled from a registry.
 
-SERVICES=(about projects blog contact proxy frontend)
+SERVICES=(about projects skills blog contact proxy frontend)
 NODE_SERVICES=(projects blog contact)
 for SERVICE in "${SERVICES[@]}"; do
   echo "    Building portfolio/$SERVICE:local..."
@@ -108,7 +113,7 @@ echo "==> [5/5] Applying Kubernetes manifests..."
 kubectl apply -f "$ROOT_DIR/manifests/namespaces.yaml"
 
 # Then: apply each service's manifests
-for DIR in about projects blog contact proxy frontend; do
+for DIR in about projects skills blog contact proxy frontend; do
   kubectl apply -f "$ROOT_DIR/manifests/$DIR/"
 done
 

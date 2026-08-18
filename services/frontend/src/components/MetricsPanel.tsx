@@ -1,5 +1,8 @@
 import type { TopologyData } from '../hooks/useTopology';
 import type { ClusterEvent, PodRef } from '../types/topology';
+import IncidentReportCard from '@/components/ui/area-chart-1';
+import BentoDashboard from '@/components/ui/bento-dashboard';
+import { cn } from '@/lib/utils';
 
 interface MetricsPanelProps {
   data: TopologyData | null;
@@ -9,171 +12,147 @@ interface MetricsPanelProps {
   onPodClick: (ref: PodRef) => void;
 }
 
-function eventDotColor(type: string) {
-  if (type === 'Warning') return 'yellow';
-  if (type === 'Normal') return 'green';
-  return 'blue';
-}
-
-export default function MetricsPanel({ data, error, lastUpdated, events, onPodClick }: MetricsPanelProps) {
+export default function MetricsPanel({
+  data,
+  error,
+  lastUpdated,
+  events,
+  onPodClick,
+}: MetricsPanelProps) {
   const runningPods = data?.pods.filter((p) => p.status === 'Running').length ?? 0;
+  const pendingPods = data?.pods.filter((p) => p.status === 'Pending').length ?? 0;
   const readyNodes = data?.nodes.filter((n) => n.status === 'Ready').length ?? 0;
   const namespaceCount = data ? new Set(data.pods.map((p) => p.namespace)).size : 0;
   const totalRestarts = data?.pods.reduce((sum, p) => sum + p.restarts, 0) ?? 0;
+  const readyPct = data?.pods.length
+    ? Math.round((runningPods / data.pods.length) * 100)
+    : 85;
 
   return (
-    <aside className="dash-metrics">
-      <section className="dash-metrics__card glass-panel">
-        <h3 className="dash-metrics__title">Cluster Details</h3>
-        <dl className="dash-metrics__list">
-          <div className="dash-metrics__row">
-            <dt>Cluster Name</dt>
-            <dd className="mono">portfolio-cluster</dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Kubernetes Version</dt>
-            <dd className="mono">{data?.clusterVersion ?? '—'}</dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Nodes</dt>
-            <dd className="mono accent">{data ? `${readyNodes} Ready` : '—'}</dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Namespaces</dt>
-            <dd className="mono">{data ? namespaceCount : '—'}</dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Total Pods</dt>
-            <dd className="mono">{data ? data.pods.length : '—'}</dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Total Restarts</dt>
-            <dd className={`mono ${totalRestarts > 0 ? 'warn' : ''}`}>
-              {data ? totalRestarts : '—'}
-            </dd>
-          </div>
-          <div className="dash-metrics__row">
-            <dt>Status</dt>
-            <dd className={`mono ${error ? 'warn' : 'accent'}`}>
-              {error ? 'Degraded' : data ? 'Healthy' : 'Connecting…'}
-            </dd>
-          </div>
+    <aside className="flex w-full flex-col gap-4 border-t-2 border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:border-l xl:border-t-0 2xl:w-96">
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-700">
+          <span className="h-2 w-2 rounded-full bg-indigo-500" />
+          Cluster Info
+        </h3>
+        <dl className="space-y-2 text-sm">
+          {[
+            { label: 'Kubernetes', value: data?.clusterVersion ?? '—', accent: true },
+            { label: 'Cloud', value: 'k3s (local)' },
+            { label: 'Region', value: 'Home Lab' },
+            {
+              label: 'Status',
+              value: error ? 'Degraded' : data ? 'Healthy' : 'Connecting',
+            },
+          ].map(({ label, value, accent }) => (
+            <div key={label} className="flex justify-between gap-2">
+              <dt className="text-zinc-500">{label}</dt>
+              <dd className={cn('mono font-medium', accent && 'text-indigo-600')}>{value}</dd>
+            </div>
+          ))}
         </dl>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {[
+            { label: 'Nodes', value: readyNodes, color: 'text-green-600' },
+            { label: 'Pods', value: data?.pods.length ?? '—', color: 'text-blue-600' },
+            { label: 'Namespaces', value: namespaceCount, color: 'text-purple-600' },
+            { label: 'Restarts', value: totalRestarts, color: totalRestarts > 0 ? 'text-amber-600' : '' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-xl border border-zinc-200 bg-zinc-50 p-2 text-center">
+              <div className={cn('text-lg font-bold', color)}>{value}</div>
+              <div className="text-[10px] uppercase text-zinc-400">{label}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="dash-metrics__card glass-panel">
-        <h3 className="dash-metrics__title">Live Activity</h3>
-        <ul className="dash-metrics__activity">
-          {events.length > 0 ? (
-            events.slice(0, 5).map((evt, i) => (
-              <li key={`${evt.reason}-${evt.lastSeen}-${i}`}>
-                <span className={`activity-dot activity-dot--${eventDotColor(evt.type)}`} />
-                <span>
-                  <span className="mono">{evt.reason}</span>
-                  {' — '}
-                  {evt.message.length > 50 ? evt.message.slice(0, 50) + '…' : evt.message}
-                  <span className="dash-metrics__activity-age"> · {evt.age}</span>
-                </span>
+      <div className="hidden xl:block">
+        <IncidentReportCard
+          runningPods={runningPods}
+          pendingPods={pendingPods}
+          eventCount={events.length || data?.pods.length || 0}
+        />
+      </div>
+
+      <BentoDashboard podCount={data?.pods.length ?? 7} readyPct={readyPct} compact />
+
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-zinc-700">Live Activity</h3>
+        <ul className="max-h-48 space-y-2 overflow-y-auto">
+          {(events.length > 0 ? events.slice(0, 6) : data?.pods.slice(0, 5) ?? []).map((item, i) => {
+            const isEvent = 'reason' in item;
+            return (
+              <li
+                key={isEvent ? `${item.reason}-${i}` : item.name}
+                className="flex items-start gap-2 rounded-lg bg-zinc-50 p-2 text-xs"
+              >
+                <span
+                  className={cn(
+                    'mt-1 h-2 w-2 shrink-0 rounded-full',
+                    isEvent
+                      ? item.type === 'Warning'
+                        ? 'bg-amber-400'
+                        : 'bg-green-500'
+                      : item.status === 'Running'
+                        ? 'bg-green-500'
+                        : 'bg-amber-400',
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="mono truncate font-medium">
+                    {isEvent ? item.reason : item.name.slice(0, 20)}
+                  </p>
+                  <p className="truncate text-zinc-400">
+                    {isEvent ? item.message.slice(0, 40) : `ns/${item.namespace}`}
+                  </p>
+                </div>
               </li>
-            ))
-          ) : data ? (
-            data.pods.slice(0, 4).map((pod) => (
-              <li key={pod.name}>
-                <span className={`activity-dot activity-dot--${pod.status === 'Running' ? 'green' : 'yellow'}`} />
-                <span>
-                  Pod <span className="mono">{pod.name.slice(0, 20)}</span> — {pod.status}
-                </span>
-              </li>
-            ))
-          ) : (
-            <li>
-              <span className="activity-dot activity-dot--blue" />
-              <span>Waiting for cluster events…</span>
-            </li>
-          )}
+            );
+          })}
         </ul>
-        <div className="metric-slot-grid">
-          <div className="metric-slot">
-            <span className="metric-slot__label">Events</span>
-            <span className="metric-slot__value mono">{events.length > 0 ? events.length : '—'}</span>
-          </div>
-          <div className="metric-slot">
-            <span className="metric-slot__label">Restarts</span>
-            <span className={`metric-slot__value mono ${totalRestarts > 0 ? 'warn' : ''}`}>
-              {data ? totalRestarts : '—'}
-            </span>
-          </div>
-        </div>
       </section>
 
-      <section className="dash-metrics__card glass-panel dash-metrics__terminal">
-        <div className="dash-metrics__terminal-header">
-          <span className="mono">kubectl get pods -A</span>
+      <section className="rounded-2xl border-2 border-zinc-900 bg-zinc-900 p-3 text-white shadow-[4px_4px_0_0_#6366f1]">
+        <div className="mb-2 flex items-center gap-2 border-b border-zinc-700 pb-2">
+          <div className="flex gap-1">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+          </div>
+          <span className="mono text-[10px] text-zinc-400">kubectl get pods -A</span>
         </div>
-        <div className="dash-metrics__terminal-body mono">
-          <div className="terminal-row terminal-row--head">
-            <span>NAMESPACE</span>
-            <span>NAME</span>
-            <span>READY</span>
-            <span>STATUS</span>
-            <span className="terminal-col--extra">RESTARTS</span>
-            <span className="terminal-col--extra">AGE</span>
+        <div className="mono max-h-56 overflow-y-auto text-[10px]">
+          <div className="grid grid-cols-3 gap-1 border-b border-zinc-700 pb-1 font-bold text-zinc-400">
+            <span>NS</span><span>NAME</span><span>STATUS</span>
           </div>
           {data ? (
             data.pods.map((pod) => (
-              <div
+              <button
                 key={pod.name}
-                className="terminal-row terminal-row--clickable"
+                type="button"
+                className="grid w-full grid-cols-3 gap-1 border-b border-zinc-800 py-1.5 text-left transition-colors hover:bg-zinc-800"
                 onClick={() => onPodClick({ namespace: pod.namespace, name: pod.name })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    onPodClick({ namespace: pod.namespace, name: pod.name });
-                  }
-                }}
               >
-                <span>{pod.namespace}</span>
-                <span title={pod.name}>{pod.name.length > 18 ? pod.name.slice(0, 16) + '…' : pod.name}</span>
-                <span>{pod.ready}</span>
-                <span className={pod.status === 'Running' ? 'accent' : 'warn'}>
+                <span className="truncate">{pod.namespace}</span>
+                <span className="truncate">{pod.name.slice(0, 14)}</span>
+                <span className={pod.status === 'Running' ? 'text-green-400' : 'text-amber-400'}>
                   {pod.status}
                 </span>
-                <span className={`terminal-col--extra ${pod.restarts > 0 ? 'warn' : ''}`}>
-                  {pod.restarts}
-                </span>
-                <span className="terminal-col--extra">{pod.age}</span>
-              </div>
+              </button>
             ))
           ) : (
-            <>
-              <div className="terminal-row terminal-row--placeholder">
-                <span>frontend</span><span>frontend-*</span><span>—/—</span><span>—</span>
-                <span className="terminal-col--extra">—</span><span className="terminal-col--extra">—</span>
-              </div>
-              <div className="terminal-row terminal-row--placeholder">
-                <span>about</span><span>about-*</span><span>—/—</span><span>—</span>
-                <span className="terminal-col--extra">—</span><span className="terminal-col--extra">—</span>
-              </div>
-              <div className="terminal-row terminal-row--placeholder">
-                <span>proxy</span><span>proxy-*</span><span>—/—</span><span>—</span>
-                <span className="terminal-col--extra">—</span><span className="terminal-col--extra">—</span>
-              </div>
-            </>
+            <p className="py-4 text-center text-zinc-500">Waiting for cluster…</p>
           )}
         </div>
-        <div className="dash-metrics__terminal-stats">
-          <span>{runningPods > 0 ? `${runningPods} running` : '— running'}</span>
-          <span>Updates every 5s</span>
+        <div className="mt-2 flex justify-between text-[10px] text-zinc-500">
+          <span>{runningPods} running</span>
+          <span>↻ 5s</span>
         </div>
       </section>
 
-      <footer className="dash-metrics__footer">
-        <span>Cluster updates every 5s</span>
-        {lastUpdated && (
-          <span className="mono">Last sync {lastUpdated.toLocaleTimeString()}</span>
-        )}
-        <span>Built with ♥ on Kubernetes</span>
+      <footer className="text-center text-[10px] text-zinc-400">
+        {lastUpdated && <p>Last sync {lastUpdated.toLocaleTimeString()}</p>}
+        <p>Built on Kubernetes ♥</p>
       </footer>
     </aside>
   );
