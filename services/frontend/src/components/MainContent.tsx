@@ -100,7 +100,7 @@ export default function MainContent({ pods, clusterHealthy, onPodClick, view, on
             darkMode={darkMode}
           />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border-2 border-zinc-200 bg-white p-5 shadow-[4px_4px_0_0_#e2e8f0] transition-colors dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[4px_4px_0_0_#18181b]">
             <ClusterArchitecture pods={pods} onPodClick={onPodClick} />
           </div>
         )}

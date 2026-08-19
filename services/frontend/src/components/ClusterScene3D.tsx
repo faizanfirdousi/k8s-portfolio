@@ -4,24 +4,20 @@ import SpriteText from 'three-spritetext';
 import * as THREE from 'three';
 import type { TopologyPod } from '../hooks/useTopology';
 import { ROUTE_BY_NAMESPACE, type PortfolioRoute } from '../config/portfolioRoutes';
-import {
-  GRAPH_COLORS,
-  graphNodeColor,
-  namespaceColor,
-} from '../config/clusterGraphColors';
 
 export type { PortfolioRoute };
 
-type NodeType = 'namespace' | 'pod' | 'node';
+type NodeType = 'control-plane' | 'worker-node' | 'pod';
 
 interface GraphNode {
   id: string;
   name: string;
   type: NodeType;
-  namespace: string;
+  namespace?: string;
   status?: string;
   color: string;
   val: number;
+  nodeName?: string;
   x?: number;
   y?: number;
   z?: number;
@@ -30,6 +26,7 @@ interface GraphNode {
 interface GraphLink {
   source: string;
   target: string;
+  linkType: 'control-link' | 'pod-link';
   value: number;
 }
 
@@ -40,7 +37,8 @@ interface ClusterScene3DProps {
   darkMode: boolean;
 }
 
-const LINK_DISTANCE = 100;
+const CONTROL_LINK_DIST = 85;
+const POD_LINK_DIST = 42;
 
 function topologySignature(pods: TopologyPod[]): string {
   return pods
@@ -49,91 +47,133 @@ function topologySignature(pods: TopologyPod[]): string {
     .join('\n');
 }
 
-function buildGraphFromPods(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink[] } {
+/**
+ * Builds a hierarchical topology graph:
+ * Control Plane (server-0)
+ *   ├── Worker Node 1 (agent-0) ──> [frontend, about, projects pods]
+ *   └── Worker Node 2 (agent-1) ──> [skills, blog, contact, proxy pods]
+ */
+function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink[] } {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
-  const seenNs = new Set<string>();
-  const seenNodes = new Set<string>();
 
-  for (const pod of pods) {
-    const nsKey = `namespace-${pod.namespace}`;
-    if (!seenNs.has(pod.namespace)) {
-      seenNs.add(pod.namespace);
+  // 1. Control Plane Node
+  nodes.push({
+    id: 'control-plane',
+    name: 'Control Plane (server-0)',
+    type: 'control-plane',
+    color: '#4f46e5',
+    val: 14,
+    y: 45,
+  });
+
+  // 2. Two Worker Nodes
+  const worker1Id = 'worker-node-1';
+  const worker2Id = 'worker-node-2';
+
+  nodes.push({
+    id: worker1Id,
+    name: 'Worker Node 1 (agent-0)',
+    type: 'worker-node',
+    nodeName: 'k3d-portfolio-agent-0',
+    color: '#0284c7',
+    val: 11,
+  });
+
+  nodes.push({
+    id: worker2Id,
+    name: 'Worker Node 2 (agent-1)',
+    type: 'worker-node',
+    nodeName: 'k3d-portfolio-agent-1',
+    color: '#0d9488',
+    val: 11,
+  });
+
+  // Links from Control Plane to both Worker Nodes
+  links.push({
+    source: 'control-plane',
+    target: worker1Id,
+    linkType: 'control-link',
+    value: 3,
+  });
+
+  links.push({
+    source: 'control-plane',
+    target: worker2Id,
+    linkType: 'control-link',
+    value: 3,
+  });
+
+  // 3. Pods: attached to respective worker node
+  const node1AssignedNs = new Set(['frontend', 'about', 'projects']);
+
+  if (pods.length > 0) {
+    for (const pod of pods) {
+      const podKey = `pod-${pod.namespace}-${pod.name}`;
+      const route = ROUTE_BY_NAMESPACE[pod.namespace];
+      const podColor = route?.color ?? '#6366f1';
+
       nodes.push({
-        id: nsKey,
-        name: pod.namespace,
-        type: 'namespace',
+        id: podKey,
+        name: pod.name,
+        type: 'pod',
         namespace: pod.namespace,
-        color: namespaceColor(pod.namespace),
-        val: 8,
+        status: pod.status,
+        color: podColor,
+        val: 7,
+      });
+
+      // Target worker node assignment
+      let targetWorker = worker1Id;
+      if (pod.node) {
+        if (pod.node.includes('agent-1') || pod.node.includes('node-2')) {
+          targetWorker = worker2Id;
+        } else if (pod.node.includes('agent-0') || pod.node.includes('node-1')) {
+          targetWorker = worker1Id;
+        } else {
+          targetWorker = node1AssignedNs.has(pod.namespace) ? worker1Id : worker2Id;
+        }
+      } else {
+        targetWorker = node1AssignedNs.has(pod.namespace) ? worker1Id : worker2Id;
+      }
+
+      links.push({
+        source: targetWorker,
+        target: podKey,
+        linkType: 'pod-link',
+        value: 1,
       });
     }
+  } else {
+    // Fallback placeholder pods when waiting for cluster data
+    const allRoutes = Object.values(ROUTE_BY_NAMESPACE);
+    for (const route of allRoutes) {
+      const podKey = `pod-${route.namespace}`;
+      nodes.push({
+        id: podKey,
+        name: `${route.namespace}-pod`,
+        type: 'pod',
+        namespace: route.namespace,
+        status: 'Running',
+        color: route.color,
+        val: 7,
+      });
 
-    const podKey = `${pod.namespace}-${pod.name}`;
-    nodes.push({
-      id: podKey,
-      name: pod.name,
-      type: 'pod',
-      namespace: pod.namespace,
-      status: pod.status,
-      color: graphNodeColor('pod', pod.name, pod.namespace, pod.status),
-      val: 6,
-    });
-    links.push({ source: nsKey, target: podKey, value: 1 });
-
-    if (pod.node) {
-      const nodeKey = `node-${pod.node}`;
-      if (!seenNodes.has(pod.node)) {
-        seenNodes.add(pod.node);
-        nodes.push({
-          id: nodeKey,
-          name: pod.node,
-          type: 'node',
-          namespace: '',
-          color: graphNodeColor('node', pod.node, ''),
-          val: 10,
-        });
-      }
-      links.push({ source: podKey, target: nodeKey, value: 0 });
+      const targetWorker = node1AssignedNs.has(route.namespace) ? worker1Id : worker2Id;
+      links.push({
+        source: targetWorker,
+        target: podKey,
+        linkType: 'pod-link',
+        value: 1,
+      });
     }
-  }
-
-  return { nodes, links };
-}
-
-function buildPlaceholderGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
-  const nodes: GraphNode[] = [];
-  const links: GraphLink[] = [];
-
-  for (const route of Object.values(ROUTE_BY_NAMESPACE)) {
-    const nsKey = `namespace-${route.namespace}`;
-    nodes.push({
-      id: nsKey,
-      name: route.namespace,
-      type: 'namespace',
-      namespace: route.namespace,
-      color: route.color,
-      val: 8,
-    });
-
-    const podKey = `${route.namespace}-pod`;
-    nodes.push({
-      id: podKey,
-      name: `${route.namespace}-pod`,
-      type: 'pod',
-      namespace: route.namespace,
-      status: 'Pending',
-      color: graphNodeColor('pod', podKey, route.namespace, 'Pending'),
-      val: 6,
-    });
-    links.push({ source: nsKey, target: podKey, value: 1 });
   }
 
   return { nodes, links };
 }
 
 function routeForNode(node: GraphNode): PortfolioRoute | null {
-  if (node.type === 'namespace' || node.type === 'pod') {
+  if (node.type === 'pod' && node.namespace) {
     return ROUTE_BY_NAMESPACE[node.namespace] ?? null;
   }
   return null;
@@ -143,16 +183,12 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const linkConfigured = useRef(false);
-  // Keep the canvas height independent from its rendered contents. Measuring it here
-  // creates a feedback loop in react-force-graph (canvas resize → parent resize → canvas resize).
+
   const [width, setWidth] = useState(800);
   const [graphHeight, setGraphHeight] = useState(540);
 
   const signature = useMemo(() => topologySignature(pods), [pods]);
-  const graphData = useMemo(() => {
-    if (pods.length === 0) return buildPlaceholderGraph();
-    return buildGraphFromPods(pods);
-  }, [signature]);
+  const graphData = useMemo(() => buildGraph(pods), [signature]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -165,7 +201,7 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
       const nextWidth = Math.floor(el.getBoundingClientRect().width);
       if (nextWidth < 1) return;
       setWidth((previous) => (Math.abs(previous - nextWidth) < 2 ? previous : nextWidth));
-      setGraphHeight(nextWidth < 640 ? 360 : nextWidth < 1024 ? 460 : 540);
+      setGraphHeight(nextWidth < 640 ? 380 : nextWidth < 1024 ? 480 : 540);
     };
 
     applySize();
@@ -191,8 +227,14 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
     if (!fg || linkConfigured.current) return;
     const linkForce = fg.d3Force('link');
     if (linkForce) {
-      linkForce.distance(() => LINK_DISTANCE);
+      linkForce.distance((link: any) =>
+        link.linkType === 'control-link' ? CONTROL_LINK_DIST : POD_LINK_DIST,
+      );
       linkConfigured.current = true;
+    }
+    const chargeForce = fg.d3Force('charge');
+    if (chargeForce) {
+      chargeForce.strength(-150);
     }
   }, []);
 
@@ -200,37 +242,92 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
     configureForces();
   }, [configureForces, graphData]);
 
-  const nodeThreeObject = useCallback((node: GraphNode) => {
-    const color = node.color;
+  // 3D Object rendering for Control Plane, Worker Nodes, and Pods
+  const nodeThreeObject = useCallback(
+    (node: GraphNode) => {
+      const group = new THREE.Group();
 
-    if (node.type === 'pod') {
-      const unhealthy =
-        node.status && node.status !== 'Running' && node.status !== 'Succeeded';
-      if (unhealthy) {
-        return new THREE.Mesh(
-          new THREE.DodecahedronGeometry(20, 0),
-          new THREE.MeshLambertMaterial({ color, transparent: false, opacity: 1 }),
-        );
+      if (node.type === 'control-plane') {
+        // Control Plane: Octahedron core + Torus wireframe
+        const geom = new THREE.OctahedronGeometry(12, 0);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(darkMode ? '#818cf8' : '#4f46e5'),
+          roughness: 0.2,
+          metalness: 0.6,
+          emissive: new THREE.Color(darkMode ? '#4338ca' : '#4f46e5'),
+          emissiveIntensity: darkMode ? 0.5 : 0.2,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        group.add(mesh);
+
+        // Orbital wireframe
+        const wireGeom = new THREE.TorusGeometry(16, 0.35, 8, 24);
+        const wireMat = new THREE.MeshBasicMaterial({
+          color: darkMode ? '#a5b4fc' : '#6366f1',
+          wireframe: true,
+          transparent: true,
+          opacity: darkMode ? 0.8 : 0.6,
+        });
+        const ring = new THREE.Mesh(wireGeom, wireMat);
+        ring.rotation.x = Math.PI / 3;
+        group.add(ring);
+
+        const sprite = new SpriteText('⚡ Control Plane\n(API Server · k3d-server-0)');
+        sprite.color = darkMode ? '#e0e7ff' : '#1e1b4b';
+        sprite.textHeight = 4.2;
+        sprite.fontFace = 'JetBrains Mono, monospace';
+        sprite.fontWeight = 'bold';
+        sprite.position.y = 20;
+        group.add(sprite);
+      } else if (node.type === 'worker-node') {
+        // Worker Node: Box
+        const geom = new THREE.BoxGeometry(15, 12, 15);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(node.color),
+          roughness: 0.3,
+          metalness: 0.5,
+          emissive: new THREE.Color(node.color),
+          emissiveIntensity: darkMode ? 0.35 : 0.15,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        group.add(mesh);
+
+        const sprite = new SpriteText(`🖥️ ${node.name}`);
+        sprite.color = darkMode ? '#f1f5f9' : '#0f172a';
+        sprite.textHeight = 3.8;
+        sprite.fontFace = 'JetBrains Mono, monospace';
+        sprite.fontWeight = 'bold';
+        sprite.position.y = 15;
+        group.add(sprite);
+      } else {
+        // Pod: Colored Sphere
+        const isHealthy = node.status === 'Running' || node.status === 'Succeeded';
+        const geom = new THREE.SphereGeometry(6, 20, 20);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(node.color),
+          roughness: 0.2,
+          metalness: 0.4,
+          emissive: new THREE.Color(node.color),
+          emissiveIntensity: isHealthy ? (darkMode ? 0.35 : 0.2) : 0.7,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        group.add(mesh);
+
+        const route = node.namespace ? ROUTE_BY_NAMESPACE[node.namespace] : null;
+        const emoji = route ? (route.id === 'home' ? '⌂' : route.id === 'about' ? '◈' : route.id === 'projects' ? '◧' : route.id === 'skills' ? '◇' : route.id === 'blog' ? '◎' : '◉') : '●';
+        const sprite = new SpriteText(`${emoji} ${node.namespace ?? 'pod'}`);
+        sprite.color = darkMode ? '#e2e8f0' : '#1e293b';
+        sprite.textHeight = 3.4;
+        sprite.fontFace = 'JetBrains Mono, monospace';
+        sprite.fontWeight = '600';
+        sprite.position.y = 9.5;
+        group.add(sprite);
       }
-      return undefined as unknown as THREE.Object3D;
-    }
 
-    if (node.type === 'node') {
-      return new THREE.Mesh(
-        new THREE.BoxGeometry(20, 20, 20),
-        new THREE.MeshLambertMaterial({ color, transparent: false, opacity: 1 }),
-      );
-    }
-
-    if (node.type === 'namespace') {
-      const sprite = new SpriteText(node.name);
-      sprite.color = color;
-      sprite.textHeight = 5;
-      return sprite;
-    }
-
-    return undefined as unknown as THREE.Object3D;
-  }, []);
+      return group;
+    },
+    [darkMode],
+  );
 
   const handleNodeClick = useCallback(
     (node: GraphNode | null) => {
@@ -241,16 +338,17 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
 
       const fg = fgRef.current;
       if (fg && node.x != null && node.y != null && node.z != null) {
-        const distance = 40;
+        const distance = 45;
         const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
         fg.cameraPosition(
           { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
           { x: node.x, y: node.y, z: node.z },
-          3000,
+          2000,
         );
       }
 
-      onNodeSelect(routeForNode(node));
+      const route = routeForNode(node);
+      onNodeSelect(route);
     },
     [onNodeSelect],
   );
@@ -258,60 +356,64 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
   return (
     <div
       ref={containerRef}
-      className="scene-canvas-wrapper relative h-[360px] w-full touch-none overflow-hidden rounded-2xl border-2 border-zinc-200 bg-slate-100 sm:h-[460px] lg:h-[540px]"
+      className={`relative w-full overflow-hidden rounded-2xl border-2 transition-colors ${
+        darkMode
+          ? 'border-zinc-800 bg-zinc-950 shadow-[4px_4px_0_0_#18181b]'
+          : 'border-zinc-200 bg-slate-50 shadow-[4px_4px_0_0_#e2e8f0]'
+      }`}
+      style={{ height: graphHeight }}
     >
+      {/* Topology Legend Overlay */}
+      <div
+        className={`pointer-events-none absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border p-2 text-[11px] font-medium backdrop-blur-md transition-colors ${
+          darkMode
+            ? 'border-zinc-800/80 bg-zinc-900/85 text-zinc-300'
+            : 'border-zinc-200/90 bg-white/90 text-zinc-700 shadow-sm'
+        }`}
+      >
+        <span className="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400">
+          <span className="h-2 w-2 rounded-sm bg-indigo-600 dark:bg-indigo-500" /> Control Plane
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
+          <span className="h-2 w-2 rounded-sm bg-sky-600 dark:bg-sky-500" /> Worker 01
+        </span>
+        <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-400">
+          <span className="h-2 w-2 rounded-sm bg-teal-600 dark:bg-teal-500" /> Worker 02
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+          <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500" /> Hosted Pods
+        </span>
+      </div>
+
       <ForceGraph3D
         ref={fgRef}
         width={width}
         height={graphHeight}
         graphData={graphData}
-        backgroundColor={darkMode ? '#101728' : GRAPH_COLORS.background}
-        showNavInfo={false}
-        controlType="trackball"
-        enableNodeDrag={false}
-        enableNavigationControls
-        numDimensions={3}
-        nodeResolution={15}
-        nodeOpacity={1}
-        nodeColor={(node: GraphNode) => node.color}
-        nodeLabel={(node: GraphNode) => {
-          if (node.type === 'pod' && node.status && node.status !== 'Running') {
-            return `${node.name}<br/>Status: ${node.status}`;
-          }
-          return node.name;
-        }}
-        nodeAutoColorBy={(node: GraphNode) => {
-          if (node.type === 'namespace') return 'namespace';
-          if (node.type === 'pod') return node.namespace;
-          if (node.type === 'node') return 'node';
-          return null;
-        }}
         nodeThreeObject={nodeThreeObject}
-        nodeThreeObjectExtend={false}
-        linkAutoColorBy="value"
-        linkWidth={0.5}
-        linkDirectionalParticles={10}
-        linkDirectionalParticleSpeed={0.005}
         onNodeClick={handleNodeClick}
-        onBackgroundClick={() => onNodeSelect(null)}
-        onNodeHover={(node: GraphNode | null) => {
-          if (containerRef.current) {
-            containerRef.current.style.cursor = node ? 'pointer' : 'grab';
-          }
-        }}
-        onEngineStop={configureForces}
+        backgroundColor={darkMode ? '#090d16' : '#f8fafc'}
+        linkColor={(link: any) =>
+          link.linkType === 'control-link'
+            ? darkMode ? '#6366f1' : '#4f46e5'
+            : darkMode ? '#334155' : '#cbd5e1'
+        }
+        linkWidth={(link: any) => (link.linkType === 'control-link' ? 2.5 : 1.4)}
+        linkDirectionalParticles={(link: any) => (link.linkType === 'control-link' ? 4 : 1)}
+        linkDirectionalParticleWidth={2}
+        linkDirectionalParticleSpeed={(link: any) =>
+          link.linkType === 'control-link' ? 0.007 : 0.003
+        }
+        linkDirectionalParticleColor={(link: any) =>
+          link.linkType === 'control-link'
+            ? darkMode ? '#a5b4fc' : '#4338ca'
+            : darkMode ? '#38bdf8' : '#0284c7'
+        }
+        showNavInfo={false}
+        enableNodeDrag={true}
       />
-
-      <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white/90 p-3 text-xs text-zinc-600 shadow-sm backdrop-blur-sm">
-        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-indigo-500" />Namespace</div>
-        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500" />Pod (Running)</div>
-        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" />Pod (Pending)</div>
-        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-slate-500" />K8s Node</div>
-      </div>
-
-      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] text-zinc-400">
-        drag to orbit · scroll to zoom · click to navigate
-      </p>
     </div>
   );
 }

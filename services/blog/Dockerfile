@@ -11,7 +11,6 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY shared/metrics-panel.js ./src/metrics-panel.js
 COPY blog/src/ ./src/
-COPY blog/posts/ ./posts/
 COPY blog/package.json ./
 USER node
 EXPOSE 3000

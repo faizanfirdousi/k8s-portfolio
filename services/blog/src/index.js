@@ -1,91 +1,160 @@
 // services/blog/src/index.js
 //
-// Blog service: reads Markdown files from the /posts directory and renders them to HTML.
+// Blog service: dynamically fetches real articles from the DEV.to API for @faizanfirdousi.
 //
-// How it works:
-//   - On startup, it scans the posts/ directory and loads all .md files
-//   - Each .md file has "front matter" — YAML metadata at the top (title, date, tags)
-//   - GET /blog       → list of all posts (title, date, excerpt)
-//   - GET /blog/:slug → full post rendered to HTML
-//
-// The "slug" is the filename without the .md extension.
-// E.g., "why-k8s-portfolio.md" → accessible at /blog/why-k8s-portfolio
+// Features:
+//   - Live integration with DEV.to API (https://dev.to/api/articles?username=faizanfirdousi)
+//   - 5-minute in-memory caching to optimize response times & respect rate limits
+//   - Rich rendering for article listings and full individual article reading
+//   - Responsive dark/light theme matching the cluster design system
 
 'use strict';
 
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const fetch = require('node-fetch');
 const { marked } = require('marked');
-const fm = require('front-matter'); // Parses YAML front matter from markdown files
-const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// The posts directory is at /app/posts inside the container
-// (because Dockerfile copies posts/ to /app/posts/)
-const POSTS_DIR = path.join(__dirname, '..', 'posts');
-
-// ── Post loading ──────────────────────────────────────────────────────────────
-// We load posts at startup rather than on every request.
-// Why? The posts are files in the image — they don't change while the container runs.
-// Loading them once into memory is much faster than reading files on every request.
-//
-// If you ever update blog posts, you'd rebuild the image and redeploy the Pod.
-// The new Pod starts fresh with the new posts loaded.
-
-function loadPosts() {
-  const posts = [];
-
-  // Check if the posts directory exists
-  if (!fs.existsSync(POSTS_DIR)) {
-    console.warn(`[blog] Posts directory not found: ${POSTS_DIR}`);
-    return posts;
-  }
-
-  const files = fs.readdirSync(POSTS_DIR)
-    .filter(f => f.endsWith('.md'))  // Only process .md files
-    .sort()                           // Sort alphabetically (filename order)
-    .reverse();                        // Newest first (assumes date-prefixed filenames or just alphabetical)
-
-  for (const filename of files) {
-    const slug = filename.replace('.md', '');  // "why-k8s-portfolio.md" → "why-k8s-portfolio"
-    const content = fs.readFileSync(path.join(POSTS_DIR, filename), 'utf-8');
-
-    // front-matter parses the YAML block at the top of the file
-    // and returns: { attributes: { title, date, ... }, body: "markdown content..." }
-    const parsed = fm(content);
-    const { title, date, excerpt, tags } = parsed.attributes;
-
-    posts.push({
-      slug,
-      title: title || slug,                          // Fallback to slug if no title
-      date: date || 'Unknown date',
-      excerpt: excerpt || '',
-      tags: tags || [],
-      body: parsed.body,                              // The raw Markdown (without front matter)
-      html: marked(parsed.body),                     // Pre-render Markdown → HTML
-    });
-  }
-
-  console.log(`[blog] Loaded ${posts.length} posts from ${POSTS_DIR}`);
-  return posts;
+let metricsPanelCss = () => '';
+let renderMetricsPanel = () => '';
+try {
+  const mp = require('./metrics-panel');
+  metricsPanelCss = mp.metricsPanelCss;
+  renderMetricsPanel = mp.renderMetricsPanel;
+} catch (e) {
+  try {
+    const mp = require('../../shared/metrics-panel');
+    metricsPanelCss = mp.metricsPanelCss;
+    renderMetricsPanel = mp.renderMetricsPanel;
+  } catch (err) {}
 }
 
-const posts = loadPosts();
+const app = express();
 
-// Build a lookup map for fast access by slug: { "why-k8s-portfolio": postObject }
-const postsBySlug = Object.fromEntries(posts.map(p => [p.slug, p]));
+// ── Configuration ────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+const DEVTO_USERNAME = process.env.DEVTO_USERNAME || 'faizanfirdousi';
+const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '300000', 10); // 5 min default
 
-// ── Shared page wrapper ───────────────────────────────────────────────────────
-// Returns the outer HTML shell (head, nav, etc.) wrapping any content
+// ── In-Memory Caches ─────────────────────────────────────────────────────────
+let articlesCache = { data: null, fetchedAt: 0 };
+const articleDetailCache = new Map(); // slug -> { data, fetchedAt }
+
+// ── DEV.to API Helpers ───────────────────────────────────────────────────────
+async function fetchDevToArticles() {
+  const now = Date.now();
+  if (articlesCache.data && now - articlesCache.fetchedAt < CACHE_TTL_MS) {
+    console.log('[blog] Serving article list from in-memory cache');
+    return articlesCache.data;
+  }
+
+  console.log(`[blog] Fetching real articles from DEV.to API for @${DEVTO_USERNAME}...`);
+
+  const headers = {
+    'Accept': 'application/vnd.forem.api-v1+json',
+    'User-Agent': 'portfolio-blog-service (faizanfirdousi)',
+  };
+
+  try {
+    const res = await fetch(`https://dev.to/api/articles?username=${DEVTO_USERNAME}`, { headers });
+    if (!res.ok) {
+      console.error(`[blog] DEV.to API error: ${res.status} ${res.statusText}`);
+      return articlesCache.data || [];
+    }
+
+    const raw = await res.json();
+    const data = raw.map(article => ({
+      id: article.id,
+      title: article.title,
+      description: article.description || '',
+      slug: article.slug,
+      url: article.url,
+      coverImage: article.cover_image || article.social_image || null,
+      publishedAt: new Date(article.published_timestamp || article.published_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+      readingTime: article.reading_time_minutes || 1,
+      reactionsCount: article.public_reactions_count || 0,
+      commentsCount: article.comments_count || 0,
+      tags: Array.isArray(article.tag_list) ? article.tag_list : (article.tags ? article.tags.split(',').map(t => t.trim()) : []),
+      author: article.user ? {
+        name: article.user.name,
+        username: article.user.username,
+        profileImage: article.user.profile_image || null,
+      } : null,
+    }));
+
+    articlesCache = { data, fetchedAt: Date.now() };
+    return data;
+  } catch (err) {
+    console.error('[blog] Failed to fetch from DEV.to:', err.message);
+    return articlesCache.data || [];
+  }
+}
+
+async function fetchDevToArticleDetail(slug) {
+  const now = Date.now();
+  const cached = articleDetailCache.get(slug);
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    console.log(`[blog] Serving article detail [${slug}] from in-memory cache`);
+    return cached.data;
+  }
+
+  console.log(`[blog] Fetching full article content for [${slug}] from DEV.to...`);
+
+  const headers = {
+    'Accept': 'application/vnd.forem.api-v1+json',
+    'User-Agent': 'portfolio-blog-service (faizanfirdousi)',
+  };
+
+  try {
+    const res = await fetch(`https://dev.to/api/articles/${DEVTO_USERNAME}/${slug}`, { headers });
+    if (!res.ok) {
+      console.error(`[blog] DEV.to API single article error: ${res.status} ${res.statusText}`);
+      return cached ? cached.data : null;
+    }
+
+    const article = await res.json();
+    const data = {
+      id: article.id,
+      title: article.title,
+      description: article.description || '',
+      slug: article.slug,
+      url: article.url,
+      coverImage: article.cover_image || null,
+      publishedAt: new Date(article.published_timestamp || article.published_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+      readingTime: article.reading_time_minutes || 1,
+      reactionsCount: article.public_reactions_count || 0,
+      commentsCount: article.comments_count || 0,
+      tags: Array.isArray(article.tag_list) ? article.tag_list : (article.tags ? article.tags.split(',').map(t => t.trim()) : []),
+      bodyHtml: article.body_html || marked(article.body_markdown || ''),
+      author: article.user ? {
+        name: article.user.name,
+        username: article.user.username,
+        profileImage: article.user.profile_image || null,
+      } : null,
+    };
+
+    articleDetailCache.set(slug, { data, fetchedAt: Date.now() });
+    return data;
+  } catch (err) {
+    console.error(`[blog] Failed to fetch article [${slug}]:`, err.message);
+    return cached ? cached.data : null;
+  }
+}
+
+// ── Shared Page Wrapper ───────────────────────────────────────────────────────
 function pageWrapper(title, content) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Technical blog posts and articles by Faizan Firdousi on Cloud, Kubernetes, Go, and Systems." />
   <title>${title} | Faizan Firdousi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -133,44 +202,56 @@ function pageWrapper(title, content) {
     .pod-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 9999px; padding: 0.25rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 2rem; }
     .dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
     /* Post list styles */
-    .post-list { display: flex; flex-direction: column; gap: 1rem; }
-    .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; transition: border-color 0.2s, transform 0.2s; }
+    .post-list { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 3rem; }
+    .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; transition: border-color 0.2s, transform 0.2s; display: flex; flex-direction: column; gap: 0.75rem; }
     .post-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-    .post-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .post-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+    .post-title { font-size: 1.2rem; font-weight: 700; line-height: 1.4; }
     .post-title a { color: var(--text); text-decoration: none; }
     .post-title a:hover { color: var(--accent); }
-    .post-meta { font-size: 0.78rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 0.6rem; }
-    .post-excerpt { font-size: 0.9rem; color: var(--muted); }
-    .tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
-    .tag { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.7rem; color: var(--accent2); font-family: 'JetBrains Mono', monospace; }
+    .post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; font-size: 0.78rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .post-meta-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .post-excerpt { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
+    .tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.25rem; }
+    .tag { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.72rem; color: var(--accent2); font-family: 'JetBrains Mono', monospace; }
+    .post-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+    .read-link { font-size: 0.85rem; font-weight: 600; color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; }
+    .read-link:hover { text-decoration: underline; }
+    .devto-link { font-size: 0.8rem; color: var(--muted); text-decoration: none; font-family: 'JetBrains Mono', monospace; }
+    .devto-link:hover { color: var(--accent2); text-decoration: underline; }
+
     /* Post detail styles */
-    .post-content h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
-    .post-content h2 { font-size: 1.3rem; font-weight: 600; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    .post-content h3 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--accent2); }
-    .post-content p { color: var(--muted); margin-bottom: 1rem; line-height: 1.75; }
-    .post-content ul, .post-content ol { color: var(--muted); margin: 0.75rem 0 1rem 1.5rem; }
+    .post-header { margin-bottom: 2rem; border-bottom: 1px solid var(--border); pb: 1.5rem; }
+    .post-cover-img { width: 100%; max-height: 380px; object-fit: cover; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border); }
+    .post-content h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.75rem; line-height: 1.3; }
+    .post-content h2 { font-size: 1.35rem; font-weight: 600; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .post-content h3 { font-size: 1.15rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--accent2); }
+    .post-content p { color: var(--text); margin-bottom: 1.25rem; line-height: 1.8; font-size: 1rem; }
+    .post-content ul, .post-content ol { color: var(--text); margin: 0.75rem 0 1.25rem 1.5rem; line-height: 1.7; }
     .post-content li { margin-bottom: 0.4rem; }
-    .post-content pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; }
-    .post-content code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--accent2); }
+    .post-content pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; overflow-x: auto; margin: 1.25rem 0; }
+    .post-content code { font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; color: var(--accent2); }
     .post-content pre code { color: var(--text); }
-    .back-link { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); text-decoration: none; font-size: 0.875rem; margin-bottom: 2rem; }
+    .post-content blockquote { border-left: 4px solid var(--accent); padding-left: 1rem; margin: 1.25rem 0; color: var(--muted); font-style: italic; }
+    .back-link { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); text-decoration: none; font-size: 0.875rem; margin-bottom: 1.5rem; }
     .back-link:hover { color: var(--accent); }
     .page-title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
-    .page-subtitle { color: var(--muted); margin-bottom: 2.5rem; }
+    .page-subtitle { color: var(--muted); margin-bottom: 2.5rem; font-size: 1rem; }
     .section-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent2); margin-bottom: 1.25rem; font-family: 'JetBrains Mono', monospace; }
+    .cache-note { font-size: 0.75rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: -1rem; margin-bottom: 1.5rem; }
     ${metricsPanelCss()}
   </style>
 </head>
 <body>
   <script>
-    // Inline script to prevent flash of incorrect theme
     const currentTheme = localStorage.getItem('portfolio-theme');
     if (currentTheme === 'dark') { document.documentElement.classList.add('dark'); }
   </script>
   <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 0 1 1-9-9Z"/></svg>
   </button>
   <div class="container">
     <div class="page-layout">
@@ -203,75 +284,111 @@ function pageWrapper(title, content) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// Post list: GET /blog or GET / (after ingress path rewriting strips /blog prefix)
-app.get(['/', '/blog', '/blog/'], (req, res) => {
+// Health check — Registered before wildcards
+app.get('/healthz', (req, res) => {
+  res.status(200).send('ok');
+});
+
+// Articles List: GET /blog or GET /
+app.get(['/', '/blog', '/blog/'], async (req, res) => {
+  const articles = await fetchDevToArticles();
+
   const listHTML = `
     <div class="breadcrumb"><a href="/">~/portfolio</a> / blog</div>
     <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
     <h1 class="page-title">Blog</h1>
-    <p class="page-subtitle">Writing about cloud engineering, Go, systems programming, and Kubernetes.</p>
-    <div class="section-title">// ${posts.length} post${posts.length !== 1 ? 's' : ''}</div>
+    <p class="page-subtitle">
+      Real technical writeups on Kubernetes, Go, systems, and databases. Fetched live via the DEV.to API from
+      <a href="https://dev.to/${DEVTO_USERNAME}" target="_blank" style="color:var(--accent2); text-decoration:none; font-weight:600">@${DEVTO_USERNAME}</a>.
+    </p>
+    <div class="section-title">// ${articles.length} Published Articles</div>
+    <p class="cache-note">Articles cached for 5 minutes to prevent rate limits.</p>
+
     <div class="post-list">
-      ${posts.length > 0
-        ? posts.map(post => `
-          <div class="post-card">
-            <div class="post-title"><a href="/blog/${post.slug}">${post.title}</a></div>
-            <div class="post-meta">${post.date}</div>
-            <div class="post-excerpt">${post.excerpt}</div>
-            <div class="tags">
-              ${post.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+      ${articles.length > 0
+        ? articles.map(article => `
+          <article class="post-card">
+            <div class="post-card-header">
+              <h2 class="post-title">
+                <a href="/blog/${article.slug}">${article.title}</a>
+              </h2>
             </div>
-          </div>
+            <div class="post-meta">
+              <span class="post-meta-item">📅 ${article.publishedAt}</span>
+              <span class="post-meta-item">⏱️ ${article.readingTime} min read</span>
+              ${article.reactionsCount > 0 ? `<span class="post-meta-item">❤️ ${article.reactionsCount} reactions</span>` : ''}
+              ${article.commentsCount > 0 ? `<span class="post-meta-item">💬 ${article.commentsCount} comments</span>` : ''}
+            </div>
+            <p class="post-excerpt">${article.description}</p>
+            <div class="tags">
+              ${article.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
+            </div>
+            <div class="post-actions">
+              <a href="/blog/${article.slug}" class="read-link">Read Post →</a>
+              <a href="${article.url}" target="_blank" rel="noopener" class="devto-link">Open on DEV.to ↗</a>
+            </div>
+          </article>
         `).join('')
-        : '<p style="color:var(--muted)">No posts yet.</p>'
+        : '<p style="color:var(--muted)">No articles loaded yet from DEV.to.</p>'
       }
     </div>
   `;
+
   res.send(pageWrapper('Blog', listHTML));
 });
 
-// Health check — MUST be registered BEFORE the wildcard /:slug route below.
-// If /:slug comes first, it intercepts /healthz and returns a 404 (post not found).
-// Kubernetes liveness/readiness probes call this directly on the pod, bypassing the ingress.
-app.get('/healthz', (req, res) => {
-  res.status(200).send('ok');
-});
+// Single Article: GET /blog/:slug or GET /:slug
+app.get(['/blog/:slug', '/:slug'], async (req, res) => {
+  const slug = req.params.slug;
+  const article = await fetchDevToArticleDetail(slug);
 
-// Individual post: GET /blog/:slug or GET /:slug (after ingress rewrite)
-app.get(['/blog/:slug', '/:slug'], (req, res) => {
-  const post = postsBySlug[req.params.slug];
-
-  if (!post) {
-    // Return a proper 404 if the post doesn't exist
-    return res.status(404).send(pageWrapper('Post not found', `
-      <div class="breadcrumb"><a href="/blog">← Blog</a></div>
-      <h1 class="page-title">Post not found</h1>
-      <p style="color:var(--muted)">The post you're looking for doesn't exist.</p>
+  if (!article) {
+    return res.status(404).send(pageWrapper('Article Not Found', `
+      <div class="breadcrumb"><a href="/blog">← Back to Blog</a></div>
+      <h1 class="page-title">Article Not Found</h1>
+      <p style="color:var(--muted)">Could not load the article from DEV.to.</p>
+      <div style="margin-top:1.5rem">
+        <a href="/blog" style="color:var(--accent); text-decoration:none; font-weight:600">← Return to all articles</a>
+      </div>
     `));
   }
 
   const postHTML = `
-    <div class="breadcrumb"><a href="/blog">← Blog</a></div>
+    <a href="/blog" class="back-link">← Back to All Articles</a>
     <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
+
+    ${article.coverImage ? `<img src="${article.coverImage}" alt="${article.title}" class="post-cover-img" />` : ''}
+
     <div class="post-content">
-      <h1>${post.title}</h1>
-      <div class="post-meta" style="margin-bottom:2rem">${post.date}</div>
-      <div class="tags" style="margin-bottom:2rem">
-        ${post.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+      <div class="post-header">
+        <h1>${article.title}</h1>
+        <div class="post-meta" style="margin-top:0.75rem; margin-bottom:1rem">
+          <span class="post-meta-item">📅 Published ${article.publishedAt}</span>
+          <span class="post-meta-item">⏱️ ${article.readingTime} min read</span>
+          ${article.reactionsCount > 0 ? `<span class="post-meta-item">❤️ ${article.reactionsCount} reactions</span>` : ''}
+          <a href="${article.url}" target="_blank" rel="noopener" style="color:var(--accent2); text-decoration:none; font-weight:600">View on DEV.to ↗</a>
+        </div>
+        <div class="tags" style="margin-bottom:1.5rem">
+          ${article.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
+        </div>
       </div>
-      ${post.html}
+
+      <div class="article-body">
+        ${article.bodyHtml}
+      </div>
+
+      <div style="margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem">
+        <a href="/blog" class="read-link">← Back to All Articles</a>
+        <a href="${article.url}" target="_blank" rel="noopener" class="read-link" style="color:var(--accent2)">Discuss &amp; Comment on DEV.to ↗</a>
+      </div>
     </div>
   `;
-  res.send(pageWrapper(post.title, postHTML));
+
+  res.send(pageWrapper(article.title, postHTML));
 });
 
-// Health check
-app.get('/healthz', (req, res) => {
-  res.status(200).send('ok');
-});
-
-// Start server
+// ── Start Server ──────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[blog] Server listening on port ${PORT}`);
-  console.log(`[blog] ${posts.length} posts loaded`);
+  console.log(`[blog] Integrated with DEV.to API for user: ${DEVTO_USERNAME}`);
 });
