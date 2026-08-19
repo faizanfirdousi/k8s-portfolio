@@ -1,34 +1,18 @@
 # manifests/about/service.yaml
-#
-# A Service is a stable network endpoint for a set of Pods.
-#
-# WHY DO WE NEED A SERVICE?
-# Pods are ephemeral — they get created, die, and are replaced with new IPs.
-# A Service provides a stable DNS name and IP that always points to healthy Pods.
-# The Ingress doesn't talk to Pods directly — it talks to Services.
-#
-# Service types:
-#   ClusterIP (what we use here): only accessible from INSIDE the cluster.
-#     → The Ingress can reach it, but the internet can't (that's what we want).
-#   NodePort: exposes a port on every node (useful for debugging).
-#   LoadBalancer: creates an external load balancer (cloud environments).
-
 apiVersion: v1
 kind: Service
 metadata:
-  name: about           # DNS name inside the cluster: about.about.svc.cluster.local
-  namespace: about      # Same namespace as the Deployment
+  name: about
+  namespace: about
 
 spec:
-  # The selector tells the Service: "send traffic to Pods with these labels."
-  # This matches the labels in our Deployment's pod template.
   selector:
     app: about
 
   ports:
     - name: http
-      port: 80           # The port THIS service listens on
-      targetPort: 80     # The port on the Pod to forward to (Nginx's port)
+      port: 80
+      targetPort: 8080
       protocol: TCP
 
-  type: ClusterIP        # Only accessible within the cluster
+  type: ClusterIP

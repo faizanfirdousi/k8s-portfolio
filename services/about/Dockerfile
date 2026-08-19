@@ -1,36 +1,20 @@
 # services/about/Dockerfile
-#
-# Strategy: Use multi-stage build even though this is just static HTML.
-# Why? It's a good habit that pays off when services become more complex.
-# For now it's effectively a single stage.
-#
-# Base image: nginx:alpine
-#   - nginx: industry-standard web server, perfect for serving static files
-#   - alpine: minimal Linux (≈5MB) — keeps the image tiny, reduces attack surface
+FROM nginx:1.27-alpine
 
-FROM nginx:alpine
-
-# LABEL adds metadata to the image — useful for auditing/debugging
 LABEL maintainer="Faizan Firdousi"
 LABEL portfolio.section="about"
 
-# Copy our static HTML files into Nginx's default serving directory.
-# Nginx will serve anything in /usr/share/nginx/html.
-# The trailing slash on the destination ensures the directory is created correctly.
 COPY content/ /usr/share/nginx/html/
-
-# Copy a custom Nginx configuration.
-# The default nginx.conf doesn't understand that we're serving under the /about path prefix,
-# so we provide our own minimal config.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Port 80 is what Nginx listens on inside the container.
-# Kubernetes Services will route traffic to this port.
-# EXPOSE is documentation — it doesn't actually open the port; that's done in the K8s Service.
-EXPOSE 80
+# Configure Nginx for unprivileged non-root execution
+RUN sed -i 's|pid\s*/run/nginx.pid;|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf && \
+    sed -i 's|error_log.*|error_log /dev/stderr notice;|g' /etc/nginx/nginx.conf && \
+    sed -i 's|access_log.*|access_log /dev/stdout main;|g' /etc/nginx/nginx.conf && \
+    sed -i '/http {/a \    client_body_temp_path /tmp/client_temp;\n    proxy_temp_path /tmp/proxy_temp_path;\n    fastcgi_temp_path /tmp/fastcgi_temp;\n    uwsgi_temp_path /tmp/uwsgi_temp;\n    scgi_temp_path /tmp/scgi_temp;' /etc/nginx/nginx.conf && \
+    echo "ok" > /usr/share/nginx/html/healthz && \
+    chown -R 101:101 /usr/share/nginx/html /etc/nginx /tmp
 
-# The healthz endpoint is a simple HTML file that returns 200 OK.
-# Kubernetes uses this to check if the Pod is alive (liveness probe)
-# and ready to receive traffic (readiness probe).
-# We create it here directly in the Dockerfile to keep it simple.
-RUN echo "ok" > /usr/share/nginx/html/healthz
+USER 101:101
+
+EXPOSE 8080

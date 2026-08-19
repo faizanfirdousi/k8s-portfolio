@@ -1,77 +1,82 @@
 # manifests/about/deployment.yaml
-#
-# A Deployment tells Kubernetes: "Keep N copies of this container running."
-# If a Pod crashes, the Deployment controller restarts it automatically.
-# If you update the image, the Deployment does a rolling update (new pods come up,
-# old pods go down — zero downtime).
-#
-# ANATOMY OF A DEPLOYMENT:
-#   spec.replicas        → how many Pod instances to run
-#   spec.selector        → how the Deployment finds which Pods it manages
-#   spec.template        → the Pod blueprint (what container to run, ports, probes)
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: about          # Name of the Deployment resource
-  namespace: about     # Must exist (created by namespaces.yaml)
+  name: about
+  namespace: about
   labels:
     app: about
 
 spec:
-  replicas: 1          # One Pod is enough for the about section
+  replicas: 1
 
-  # The selector is how the Deployment "owns" Pods.
-  # It looks for Pods whose labels match app=about in namespace=about.
   selector:
     matchLabels:
       app: about
 
-  # The template is the blueprint for each Pod the Deployment creates.
-  # Every Pod created by this Deployment gets these labels and this container spec.
   template:
     metadata:
       labels:
         app: about
-        portfolio-section: about   # Extra label — useful for NetworkPolicy rules
+        portfolio-section: about
 
     spec:
+      # Disable ServiceAccount token mounting for security (static site does not need K8s API)
+      automountServiceAccountToken: false
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
         - name: about
-          # imagePullPolicy: Never tells Kubernetes: don't try to pull from a registry.
-          # We loaded this image directly into the cluster with `k3d image import`.
           image: portfolio/about:local
           imagePullPolicy: Never
 
           ports:
-            - containerPort: 80   # Must match what Nginx listens on
+            - containerPort: 8080
 
-          # Liveness probe: "Is this container still alive?"
-          # If this fails 3 times in a row, Kubernetes RESTARTS the container.
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 80
-            initialDelaySeconds: 5   # Wait 5s after start before first check
-            periodSeconds: 10         # Check every 10 seconds
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
 
-          # Readiness probe: "Is this container ready to receive traffic?"
-          # If this fails, Kubernetes REMOVES this Pod from the Service's endpoints.
-          # Traffic stops going to it, but the Pod isn't restarted.
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 80
+              port: 8080
             initialDelaySeconds: 3
             periodSeconds: 5
 
-          # Resource requests and limits: critical for cluster stability
-          # requests: what the scheduler guarantees this container will get
-          # limits: the maximum it's allowed to use
           resources:
             requests:
-              memory: "32Mi"   # 32 megabytes RAM
-              cpu: "10m"       # 10 millicores = 1% of a CPU core
+              memory: "32Mi"
+              cpu: "10m"
+              ephemeral-storage: "10Mi"
             limits:
               memory: "64Mi"
               cpu: "50m"
+              ephemeral-storage: "20Mi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 10Mi

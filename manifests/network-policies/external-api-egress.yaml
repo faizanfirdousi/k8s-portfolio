@@ -1,0 +1,57 @@
+# manifests/network-policies/external-api-egress.yaml
+#
+# Allows `projects` and `blog` services to reach external public APIs (GitHub, DEV.to)
+# over HTTPS (TCP 443) while blocking access to internal RFC1918 private networks
+# and the AWS EC2 Instance Metadata Service (169.254.169.254).
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-api-egress
+  namespace: projects
+spec:
+  podSelector:
+    matchLabels:
+      app: projects
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32  # Block AWS EC2 Instance Metadata Service (IMDS)
+              - 10.0.0.0/8          # Block RFC1918 private network
+              - 172.16.0.0/12       # Block RFC1918 private network
+              - 192.168.0.0/16      # Block RFC1918 private network
+              - 127.0.0.0/8         # Block loopback
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-api-egress
+  namespace: blog
+spec:
+  podSelector:
+    matchLabels:
+      app: blog
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32  # Block AWS EC2 Instance Metadata Service (IMDS)
+              - 10.0.0.0/8          # Block RFC1918 private network
+              - 172.16.0.0/12       # Block RFC1918 private network
+              - 192.168.0.0/16      # Block RFC1918 private network
+              - 127.0.0.0/8         # Block loopback
+      ports:
+        - protocol: TCP
+          port: 443

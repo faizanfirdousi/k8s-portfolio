@@ -1,14 +1,10 @@
 // services/projects/src/index.js
 //
 // This is the "projects" section service.
-// It does two things:
-//   1. Calls the GitHub API to get stats (stars, forks, description) for pinned repos
-//   2. Renders an HTML page with that data + your project writeups
+// It calls GitHub API to get stats for pinned repos and renders an HTML page.
 //
-// WHY NODE/EXPRESS HERE AND NOT NGINX?
-//   This page needs DYNAMIC data — live GitHub stats change over time.
-//   We can't bake them into a static HTML file. We need a server that
-//   fetches fresh data on each request (with caching to avoid rate limits).
+// Hardened with HTML entity escaping, request timeouts, security headers,
+// and sanitized error handling.
 
 'use strict';
 
@@ -18,30 +14,47 @@ const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 
 const app = express();
 
-// ── Configuration ────────────────────────────────────────────────────────────
-// Reading config from environment variables is the Kubernetes way.
-// Never hardcode values that change between environments (local vs prod).
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: https:;");
+  next();
+});
 
+// ── Configuration ────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME || 'faizanfirdousi';
-// Optional: set GITHUB_TOKEN env var (as a K8s Secret) for higher rate limits
-// Without a token: 60 requests/hour. With token: 5000 requests/hour.
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
-// Cache TTL: how long to keep GitHub API responses before re-fetching.
-// 5 minutes = 300,000 milliseconds. This prevents hitting rate limits.
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '300000', 10);
+const FETCH_TIMEOUT_MS = 8000; // 8s timeout to prevent DoS from slow external APIs
 
 // ── In-memory cache ───────────────────────────────────────────────────────────
-// Simple cache: { data: [...], fetchedAt: timestamp }
-// WHY IN-MEMORY AND NOT REDIS?
-//   For v1, this is good enough. The cache lives in the Node process.
-//   If the Pod restarts, cache is cleared — but that's fine, it'll re-fetch.
-//   Using Redis would add another dependency and another Pod to manage.
 let cache = { data: null, fetchedAt: 0 };
+
+// ── Security Helpers ─────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function sanitizeUrl(url) {
+  if (typeof url !== 'string') return '#';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('https://github.com/') || trimmed.startsWith('https://')) {
+    return escapeHtml(trimmed);
+  }
+  return '#';
+}
 
 // ── GitHub API helper ─────────────────────────────────────────────────────────
 async function fetchGitHubRepos() {
-  // Check if our cache is still fresh
   const now = Date.now();
   if (cache.data && (now - cache.fetchedAt) < CACHE_TTL_MS) {
     console.log('[projects] Serving from cache');
@@ -50,85 +63,94 @@ async function fetchGitHubRepos() {
 
   console.log(`[projects] Fetching repos from GitHub for @${GITHUB_USERNAME}...`);
 
-  // Build the headers for the GitHub API request
   const headers = {
     'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'portfolio-projects-service',
   };
-  // If we have a GitHub token, use it (higher rate limits)
   if (GITHUB_TOKEN) {
     headers['Authorization'] = `token ${GITHUB_TOKEN}`;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    // GitHub API: list public repos sorted by recently pushed, limit to 20
+    const encodedUsername = encodeURIComponent(GITHUB_USERNAME);
     const response = await fetch(
-      `https://api.github.com/users/${GITHUB_USERNAME}/repos?type=public&sort=pushed&per_page=20`,
-      { headers }
+      `https://api.github.com/users/${encodedUsername}/repos?type=public&sort=pushed&per_page=20`,
+      { headers, signal: controller.signal }
     );
 
     if (!response.ok) {
       console.error(`[projects] GitHub API error: ${response.status} ${response.statusText}`);
-      // Return cached data if available (stale is better than nothing)
       return cache.data || [];
     }
 
     const repos = await response.json();
+    if (!Array.isArray(repos)) {
+      return cache.data || [];
+    }
 
-    // Filter out forked repos — we want only original work
-    // Sort by stars descending — most popular first
     const ownRepos = repos
       .filter(r => !r.fork)
-      .sort((a, b) => b.stargazers_count - a.stargazers_count)
-      .slice(0, 8); // Show top 8
+      .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
+      .slice(0, 8);
 
-    // Transform to only what we need — don't expose the full API response
     const data = ownRepos.map(repo => ({
-      name: repo.name,
+      name: repo.name || 'Untitled',
       description: repo.description || 'No description provided.',
-      url: repo.html_url,
-      stars: repo.stargazers_count,
-      forks: repo.forks_count,
-      language: repo.language,
-      updatedAt: new Date(repo.pushed_at).toLocaleDateString('en-US', {
+      url: repo.html_url || '',
+      stars: typeof repo.stargazers_count === 'number' ? repo.stargazers_count : 0,
+      forks: typeof repo.forks_count === 'number' ? repo.forks_count : 0,
+      language: repo.language || '',
+      updatedAt: repo.pushed_at ? new Date(repo.pushed_at).toLocaleDateString('en-US', {
         year: 'numeric', month: 'short', day: 'numeric'
-      }),
+      }) : '',
     }));
 
-    // Update the cache
     cache = { data, fetchedAt: Date.now() };
     return data;
 
   } catch (err) {
     console.error('[projects] Failed to fetch from GitHub:', err.message);
-    return cache.data || []; // Return stale cache or empty array on error
+    return cache.data || [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 // ── HTML renderer ─────────────────────────────────────────────────────────────
 function renderPage(repos) {
-  // We build HTML as a template string.
-  // In production you'd use a template engine (Handlebars, EJS, etc.)
-  // but for our small service, a template string is clear and dependency-free.
+  const safeRepos = Array.isArray(repos) ? repos : [];
+  const repoCards = safeRepos.length > 0
+    ? safeRepos.map(repo => {
+        const safeName = escapeHtml(repo.name);
+        const safeDesc = escapeHtml(repo.description);
+        const safeUrl = sanitizeUrl(repo.url);
+        const safeLang = escapeHtml(repo.language);
+        const safeUpdated = escapeHtml(repo.updatedAt);
+        const stars = Number.isInteger(repo.stars) && repo.stars > 0 ? repo.stars : 0;
+        const forks = Number.isInteger(repo.forks) && repo.forks > 0 ? repo.forks : 0;
 
-  const repoCards = repos.length > 0
-    ? repos.map(repo => `
+        return `
         <div class="repo-card">
           <div class="repo-header">
-            <a href="${repo.url}" class="repo-name" target="_blank" rel="noopener">${repo.name}</a>
+            <a href="${safeUrl}" class="repo-name" target="_blank" rel="noopener noreferrer">${safeName}</a>
             <div class="repo-stats">
-              ${repo.stars > 0 ? `<span class="stat">⭐ ${repo.stars}</span>` : ''}
-              ${repo.forks > 0 ? `<span class="stat">🍴 ${repo.forks}</span>` : ''}
+              ${stars > 0 ? `<span class="stat">⭐ ${stars}</span>` : ''}
+              ${forks > 0 ? `<span class="stat">🍴 ${forks}</span>` : ''}
             </div>
           </div>
-          <p class="repo-desc">${repo.description}</p>
+          <p class="repo-desc">${safeDesc}</p>
           <div class="repo-footer">
-            ${repo.language ? `<span class="lang-badge">${repo.language}</span>` : ''}
-            <span class="updated">Updated ${repo.updatedAt}</span>
+            ${safeLang ? `<span class="lang-badge">${safeLang}</span>` : ''}
+            ${safeUpdated ? `<span class="updated">Updated ${safeUpdated}</span>` : ''}
           </div>
-        </div>
-      `).join('')
+        </div>`;
+      }).join('')
     : `<p class="no-repos">Could not load repositories. GitHub API may be unavailable.</p>`;
+
+  const safeUsername = escapeHtml(GITHUB_USERNAME);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -221,7 +243,7 @@ function renderPage(repos) {
     <h1>Projects</h1>
     <p class="subtitle">
       Featured projects and code repositories. Live stats fetched from
-      <a href="https://github.com/${GITHUB_USERNAME}" class="github-link" target="_blank">@${GITHUB_USERNAME}</a>.
+      <a href="https://github.com/${safeUsername}" class="github-link" target="_blank" rel="noopener noreferrer">@${safeUsername}</a>.
     </p>
     <div class="section-title">// GitHub repositories</div>
     <p class="cache-note">Stats cached for 5 minutes to respect GitHub rate limits.</p>
@@ -256,13 +278,11 @@ function renderPage(repos) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // Health check — MUST be before any wildcard routes
-// Kubernetes probes call this directly on the pod (bypassing ingress)
 app.get('/healthz', (req, res) => {
   res.status(200).send('ok');
 });
 
 // Main route: fetch repos and render the HTML page
-// Handles both /projects (direct) and / (after ingress strips the prefix)
 app.get(['/', '/projects', '/projects/'], async (req, res) => {
   try {
     const repos = await fetchGitHubRepos();
@@ -280,22 +300,13 @@ app.get(['/projects/api/repos', '/api/repos'], async (req, res) => {
     const repos = await fetchGitHubRepos();
     res.json({ repos, cachedAt: new Date(cache.fetchedAt).toISOString() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[projects] API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch repositories' });
   }
 });
 
-// Health check: Kubernetes probes call this
-// IMPORTANT: this must return 200 OK quickly, without external calls.
-// That's why we don't call GitHub here — if GitHub is down, our Pod should still be "healthy".
-app.get('/healthz', (req, res) => {
-  res.status(200).send('ok');
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[projects] Server listening on port ${PORT}`);
 });
 
-// ── Start server ──────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  // 0.0.0.0 means listen on ALL network interfaces inside the container.
-  // If we listened on 127.0.0.1 (localhost), Kubernetes wouldn't be able to reach us.
-  console.log(`[projects] Server listening on port ${PORT}`);
-  console.log(`[projects] GitHub username: @${GITHUB_USERNAME}`);
-  console.log(`[projects] Cache TTL: ${CACHE_TTL_MS / 1000}s`);
-});

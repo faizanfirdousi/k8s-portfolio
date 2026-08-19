@@ -2,11 +2,8 @@
 //
 // Blog service: dynamically fetches real articles from the DEV.to API for @faizanfirdousi.
 //
-// Features:
-//   - Live integration with DEV.to API (https://dev.to/api/articles?username=faizanfirdousi)
-//   - 5-minute in-memory caching to optimize response times & respect rate limits
-//   - Rich rendering for article listings and full individual article reading
-//   - Responsive dark/light theme matching the cluster design system
+// Hardened with strict slug validation, URI encoding, request timeouts,
+// HTML entity escaping, and security headers.
 
 'use strict';
 
@@ -29,14 +26,55 @@ try {
 
 const app = express();
 
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: https:;");
+  next();
+});
+
 // ── Configuration ────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 const DEVTO_USERNAME = process.env.DEVTO_USERNAME || 'faizanfirdousi';
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '300000', 10); // 5 min default
+const FETCH_TIMEOUT_MS = 8000; // 8s timeout to prevent thread hangs
 
 // ── In-Memory Caches ─────────────────────────────────────────────────────────
 let articlesCache = { data: null, fetchedAt: 0 };
 const articleDetailCache = new Map(); // slug -> { data, fetchedAt }
+
+// ── Security Helpers ─────────────────────────────────────────────────────────
+const SLUG_REGEX = /^[a-zA-Z0-9_-]{1,150}$/;
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function sanitizeUrl(url) {
+  if (typeof url !== 'string') return '#';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('https://dev.to/') || trimmed.startsWith('https://')) {
+    return escapeHtml(trimmed);
+  }
+  return '#';
+}
+
+function sanitizeImageUrl(url) {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('https://')) {
+    return escapeHtml(trimmed);
+  }
+  return null;
+}
 
 // ── DEV.to API Helpers ───────────────────────────────────────────────────────
 async function fetchDevToArticles() {
@@ -53,33 +91,44 @@ async function fetchDevToArticles() {
     'User-Agent': 'portfolio-blog-service (faizanfirdousi)',
   };
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const res = await fetch(`https://dev.to/api/articles?username=${DEVTO_USERNAME}`, { headers });
+    const encodedUser = encodeURIComponent(DEVTO_USERNAME);
+    const res = await fetch(`https://dev.to/api/articles?username=${encodedUser}`, {
+      headers,
+      signal: controller.signal,
+    });
     if (!res.ok) {
       console.error(`[blog] DEV.to API error: ${res.status} ${res.statusText}`);
       return articlesCache.data || [];
     }
 
     const raw = await res.json();
+    if (!Array.isArray(raw)) {
+      return articlesCache.data || [];
+    }
+
     const data = raw.map(article => ({
       id: article.id,
-      title: article.title,
+      title: article.title || 'Untitled',
       description: article.description || '',
-      slug: article.slug,
-      url: article.url,
+      slug: article.slug || '',
+      url: article.url || '',
       coverImage: article.cover_image || article.social_image || null,
       publishedAt: new Date(article.published_timestamp || article.published_at).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
       }),
-      readingTime: article.reading_time_minutes || 1,
-      reactionsCount: article.public_reactions_count || 0,
-      commentsCount: article.comments_count || 0,
-      tags: Array.isArray(article.tag_list) ? article.tag_list : (article.tags ? article.tags.split(',').map(t => t.trim()) : []),
+      readingTime: typeof article.reading_time_minutes === 'number' ? article.reading_time_minutes : 1,
+      reactionsCount: typeof article.public_reactions_count === 'number' ? article.public_reactions_count : 0,
+      commentsCount: typeof article.comments_count === 'number' ? article.comments_count : 0,
+      tags: Array.isArray(article.tag_list) ? article.tag_list : (typeof article.tags === 'string' ? article.tags.split(',').map(t => t.trim()) : []),
       author: article.user ? {
-        name: article.user.name,
-        username: article.user.username,
+        name: article.user.name || '',
+        username: article.user.username || '',
         profileImage: article.user.profile_image || null,
       } : null,
     }));
@@ -89,10 +138,16 @@ async function fetchDevToArticles() {
   } catch (err) {
     console.error('[blog] Failed to fetch from DEV.to:', err.message);
     return articlesCache.data || [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 async function fetchDevToArticleDetail(slug) {
+  if (!SLUG_REGEX.test(slug)) {
+    return null;
+  }
+
   const now = Date.now();
   const cached = articleDetailCache.get(slug);
   if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
@@ -107,8 +162,16 @@ async function fetchDevToArticleDetail(slug) {
     'User-Agent': 'portfolio-blog-service (faizanfirdousi)',
   };
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const res = await fetch(`https://dev.to/api/articles/${DEVTO_USERNAME}/${slug}`, { headers });
+    const encodedUser = encodeURIComponent(DEVTO_USERNAME);
+    const encodedSlug = encodeURIComponent(slug);
+    const res = await fetch(`https://dev.to/api/articles/${encodedUser}/${encodedSlug}`, {
+      headers,
+      signal: controller.signal,
+    });
     if (!res.ok) {
       console.error(`[blog] DEV.to API single article error: ${res.status} ${res.statusText}`);
       return cached ? cached.data : null;
@@ -117,24 +180,24 @@ async function fetchDevToArticleDetail(slug) {
     const article = await res.json();
     const data = {
       id: article.id,
-      title: article.title,
+      title: article.title || 'Untitled',
       description: article.description || '',
-      slug: article.slug,
-      url: article.url,
+      slug: article.slug || slug,
+      url: article.url || '',
       coverImage: article.cover_image || null,
       publishedAt: new Date(article.published_timestamp || article.published_at).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
       }),
-      readingTime: article.reading_time_minutes || 1,
-      reactionsCount: article.public_reactions_count || 0,
-      commentsCount: article.comments_count || 0,
-      tags: Array.isArray(article.tag_list) ? article.tag_list : (article.tags ? article.tags.split(',').map(t => t.trim()) : []),
-      bodyHtml: article.body_html || marked(article.body_markdown || ''),
+      readingTime: typeof article.reading_time_minutes === 'number' ? article.reading_time_minutes : 1,
+      reactionsCount: typeof article.public_reactions_count === 'number' ? article.public_reactions_count : 0,
+      commentsCount: typeof article.comments_count === 'number' ? article.comments_count : 0,
+      tags: Array.isArray(article.tag_list) ? article.tag_list : (typeof article.tags === 'string' ? article.tags.split(',').map(t => t.trim()) : []),
+      bodyHtml: article.body_html || (article.body_markdown ? marked(article.body_markdown) : ''),
       author: article.user ? {
-        name: article.user.name,
-        username: article.user.username,
+        name: article.user.name || '',
+        username: article.user.username || '',
         profileImage: article.user.profile_image || null,
       } : null,
     };
@@ -144,18 +207,21 @@ async function fetchDevToArticleDetail(slug) {
   } catch (err) {
     console.error(`[blog] Failed to fetch article [${slug}]:`, err.message);
     return cached ? cached.data : null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 // ── Shared Page Wrapper ───────────────────────────────────────────────────────
 function pageWrapper(title, content) {
+  const safeTitle = escapeHtml(title);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Technical blog posts and articles by Faizan Firdousi on Cloud, Kubernetes, Go, and Systems." />
-  <title>${title} | Faizan Firdousi</title>
+  <title>${safeTitle} | Faizan Firdousi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
@@ -223,7 +289,7 @@ function pageWrapper(title, content) {
     .devto-link:hover { color: var(--accent2); text-decoration: underline; }
 
     /* Post detail styles */
-    .post-header { margin-bottom: 2rem; border-bottom: 1px solid var(--border); pb: 1.5rem; }
+    .post-header { margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }
     .post-cover-img { width: 100%; max-height: 380px; object-fit: cover; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border); }
     .post-content h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.75rem; line-height: 1.3; }
     .post-content h2 { font-size: 1.35rem; font-weight: 600; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
@@ -251,7 +317,7 @@ function pageWrapper(title, content) {
   </script>
   <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 0 1 1-9-9Z"/></svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
   </button>
   <div class="container">
     <div class="page-layout">
@@ -292,6 +358,7 @@ app.get('/healthz', (req, res) => {
 // Articles List: GET /blog or GET /
 app.get(['/', '/blog', '/blog/'], async (req, res) => {
   const articles = await fetchDevToArticles();
+  const safeUser = escapeHtml(DEVTO_USERNAME);
 
   const listHTML = `
     <div class="breadcrumb"><a href="/">~/portfolio</a> / blog</div>
@@ -299,47 +366,69 @@ app.get(['/', '/blog', '/blog/'], async (req, res) => {
     <h1 class="page-title">Blog</h1>
     <p class="page-subtitle">
       Real technical writeups on Kubernetes, Go, systems, and databases. Fetched live via the DEV.to API from
-      <a href="https://dev.to/${DEVTO_USERNAME}" target="_blank" style="color:var(--accent2); text-decoration:none; font-weight:600">@${DEVTO_USERNAME}</a>.
+      <a href="https://dev.to/${safeUser}" target="_blank" rel="noopener noreferrer" style="color:var(--accent2); text-decoration:none; font-weight:600">@${safeUser}</a>.
     </p>
     <div class="section-title">// ${articles.length} Published Articles</div>
     <p class="cache-note">Articles cached for 5 minutes to prevent rate limits.</p>
 
     <div class="post-list">
       ${articles.length > 0
-        ? articles.map(article => `
+        ? articles.map(article => {
+            const safeSlug = encodeURIComponent(article.slug);
+            const safeTitle = escapeHtml(article.title);
+            const safeDesc = escapeHtml(article.description);
+            const safeDate = escapeHtml(article.publishedAt);
+            const safeUrl = sanitizeUrl(article.url);
+            const safeTags = Array.isArray(article.tags) ? article.tags.map(t => escapeHtml(t)) : [];
+
+            return `
           <article class="post-card">
             <div class="post-card-header">
               <h2 class="post-title">
-                <a href="/blog/${article.slug}">${article.title}</a>
+                <a href="/blog/${safeSlug}">${safeTitle}</a>
               </h2>
             </div>
             <div class="post-meta">
-              <span class="post-meta-item">📅 ${article.publishedAt}</span>
+              <span class="post-meta-item">📅 ${safeDate}</span>
               <span class="post-meta-item">⏱️ ${article.readingTime} min read</span>
               ${article.reactionsCount > 0 ? `<span class="post-meta-item">❤️ ${article.reactionsCount} reactions</span>` : ''}
               ${article.commentsCount > 0 ? `<span class="post-meta-item">💬 ${article.commentsCount} comments</span>` : ''}
             </div>
-            <p class="post-excerpt">${article.description}</p>
+            <p class="post-excerpt">${safeDesc}</p>
             <div class="tags">
-              ${article.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
+              ${safeTags.map(t => `<span class="tag">#${t}</span>`).join('')}
             </div>
             <div class="post-actions">
-              <a href="/blog/${article.slug}" class="read-link">Read Post →</a>
-              <a href="${article.url}" target="_blank" rel="noopener" class="devto-link">Open on DEV.to ↗</a>
+              <a href="/blog/${safeSlug}" class="read-link">Read Post →</a>
+              <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="devto-link">Open on DEV.to ↗</a>
             </div>
           </article>
-        `).join('')
+        `;
+          }).join('')
         : '<p style="color:var(--muted)">No articles loaded yet from DEV.to.</p>'
       }
     </div>
   `;
 
+  res.setHeader('Content-Type', 'text/html');
   res.send(pageWrapper('Blog', listHTML));
 });
 
 // Single Article: GET /blog/:slug or GET /:slug
 app.get(['/blog/:slug', '/:slug'], async (req, res) => {
   const slug = req.params.slug;
+
+  if (!SLUG_REGEX.test(slug)) {
+    return res.status(400).send(pageWrapper('Invalid Article Request', `
+      <div class="breadcrumb"><a href="/blog">← Back to Blog</a></div>
+      <h1 class="page-title">Invalid Request</h1>
+      <p style="color:var(--muted)">The requested article slug contains invalid characters.</p>
+      <div style="margin-top:1.5rem">
+        <a href="/blog" style="color:var(--accent); text-decoration:none; font-weight:600">← Return to all articles</a>
+      </div>
+    `));
+  }
+
   const article = await fetchDevToArticleDetail(slug);
 
   if (!article) {
@@ -353,23 +442,29 @@ app.get(['/blog/:slug', '/:slug'], async (req, res) => {
     `));
   }
 
+  const safeTitle = escapeHtml(article.title);
+  const safeDate = escapeHtml(article.publishedAt);
+  const safeUrl = sanitizeUrl(article.url);
+  const safeCover = sanitizeImageUrl(article.coverImage);
+  const safeTags = Array.isArray(article.tags) ? article.tags.map(t => escapeHtml(t)) : [];
+
   const postHTML = `
     <a href="/blog" class="back-link">← Back to All Articles</a>
     <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
 
-    ${article.coverImage ? `<img src="${article.coverImage}" alt="${article.title}" class="post-cover-img" />` : ''}
+    ${safeCover ? `<img src="${safeCover}" alt="${safeTitle}" class="post-cover-img" />` : ''}
 
     <div class="post-content">
       <div class="post-header">
-        <h1>${article.title}</h1>
+        <h1>${safeTitle}</h1>
         <div class="post-meta" style="margin-top:0.75rem; margin-bottom:1rem">
-          <span class="post-meta-item">📅 Published ${article.publishedAt}</span>
+          <span class="post-meta-item">📅 Published ${safeDate}</span>
           <span class="post-meta-item">⏱️ ${article.readingTime} min read</span>
           ${article.reactionsCount > 0 ? `<span class="post-meta-item">❤️ ${article.reactionsCount} reactions</span>` : ''}
-          <a href="${article.url}" target="_blank" rel="noopener" style="color:var(--accent2); text-decoration:none; font-weight:600">View on DEV.to ↗</a>
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--accent2); text-decoration:none; font-weight:600">View on DEV.to ↗</a>
         </div>
         <div class="tags" style="margin-bottom:1.5rem">
-          ${article.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
+          ${safeTags.map(t => `<span class="tag">#${t}</span>`).join('')}
         </div>
       </div>
 
@@ -379,16 +474,17 @@ app.get(['/blog/:slug', '/:slug'], async (req, res) => {
 
       <div style="margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem">
         <a href="/blog" class="read-link">← Back to All Articles</a>
-        <a href="${article.url}" target="_blank" rel="noopener" class="read-link" style="color:var(--accent2)">Discuss &amp; Comment on DEV.to ↗</a>
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="read-link" style="color:var(--accent2)">Discuss &amp; Comment on DEV.to ↗</a>
       </div>
     </div>
   `;
 
+  res.setHeader('Content-Type', 'text/html');
   res.send(pageWrapper(article.title, postHTML));
 });
 
-// ── Start Server ──────────────────────────────────────────────────────────────
+// Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[blog] Server listening on port ${PORT}`);
-  console.log(`[blog] Integrated with DEV.to API for user: ${DEVTO_USERNAME}`);
 });
+

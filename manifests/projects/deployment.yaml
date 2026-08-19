@@ -21,6 +21,16 @@ spec:
         portfolio-section: projects
 
     spec:
+      automountServiceAccountToken: false
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
         - name: projects
           image: portfolio/projects:local
@@ -29,27 +39,23 @@ spec:
           ports:
             - containerPort: 3000
 
-          # Environment variables: configure the service without changing code.
-          # GITHUB_USERNAME tells the app which GitHub account to pull stats from.
-          # This is the correct Kubernetes pattern: values in env, secrets in Secrets.
           env:
             - name: PORT
               value: "3000"
             - name: GITHUB_USERNAME
               value: "faizanfirdousi"
-            # GITHUB_TOKEN is intentionally omitted here for v1 (local dev).
-            # In Phase 5 (production), add it as a reference to a Kubernetes Secret:
-            #   - name: GITHUB_TOKEN
-            #     valueFrom:
-            #       secretKeyRef:
-            #         name: github-credentials
-            #         key: token
+            # Optional production secret reference:
+            # - name: GITHUB_TOKEN
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: github-credentials
+            #       key: token
 
           livenessProbe:
             httpGet:
               path: /healthz
               port: 3000
-            initialDelaySeconds: 10   # Node.js needs a bit longer to start than Nginx
+            initialDelaySeconds: 10
             periodSeconds: 10
 
           readinessProbe:
@@ -63,6 +69,25 @@ spec:
             requests:
               memory: "64Mi"
               cpu: "50m"
+              ephemeral-storage: "10Mi"
             limits:
               memory: "128Mi"
               cpu: "100m"
+              ephemeral-storage: "20Mi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 10Mi

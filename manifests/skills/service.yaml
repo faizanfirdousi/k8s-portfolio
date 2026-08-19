@@ -1,14 +1,18 @@
+# manifests/skills/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: skills
   namespace: skills
+
 spec:
   selector:
     app: skills
+
   ports:
     - name: http
       port: 80
-      targetPort: 80
+      targetPort: 8080
       protocol: TCP
+
   type: ClusterIP

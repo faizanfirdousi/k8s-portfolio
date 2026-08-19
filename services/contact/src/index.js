@@ -2,15 +2,8 @@
 //
 // Contact service: serves a contact form and handles form submissions.
 //
-// v1 behavior: submissions are just logged to stdout.
-// Why stdout? In Kubernetes, `kubectl logs <pod>` reads stdout/stderr.
-// This means form submissions are visible via:
-//   kubectl logs -n contact deployment/contact
-//
-// This is actually useful: no database to manage, and Kubernetes' log
-// aggregation tools (Loki, CloudWatch, etc.) can forward these to wherever you want.
-//
-// v2 could: forward to an email via SMTP (add nodemailer + SMTP Secret)
+// Hardened with HTML entity escaping, strict input validation,
+// body limits, in-memory rate limiting, and security headers.
 
 'use strict';
 
@@ -20,13 +13,67 @@ const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse URL-encoded form data (from <form method="POST">)
-app.use(express.urlencoded({ extended: false }));
-// Parse JSON bodies (if we ever add a JSON API client)
-app.use(express.json());
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: https:;");
+  next();
+});
+
+// Enforce request body size limits to prevent memory exhaustion / DoS
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
+app.use(express.json({ limit: '10kb' }));
+
+// ── Security Helpers ─────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+// In-memory rate limiting for form submissions (5 requests per minute per IP)
+const submissionRateMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_SUBMISSIONS_PER_WINDOW = 5;
+
+// Clean up stale rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of submissionRateMap.entries()) {
+    if (now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
+      submissionRateMap.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = submissionRateMap.get(ip) || { count: 0, windowStart: now };
+  if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry.count = 1;
+    entry.windowStart = now;
+  } else {
+    entry.count += 1;
+  }
+  submissionRateMap.set(ip, entry);
+  return entry.count <= MAX_SUBMISSIONS_PER_WINDOW;
+}
 
 // ── HTML template ─────────────────────────────────────────────────────────────
-function contactPageHtml() {
+function contactPageHtml(errorMessage = '') {
+  const errorBanner = errorMessage
+    ? `<div style="background:#fee2e2; border:1px solid #ef4444; color:#991b1b; padding:0.75rem 1rem; border-radius:8px; margin-bottom:1.5rem; font-size:0.875rem;">${escapeHtml(errorMessage)}</div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -124,19 +171,21 @@ function contactPageHtml() {
       Interested in connecting, discussing cloud systems, Go development, AI, or collaborating? Drop me a message.
     </p>
 
+    ${errorBanner}
+
     <div class="form-card">
       <form id="contact-form" method="POST" action="/contact/submit">
         <div class="form-group">
           <label for="name">Name</label>
-          <input type="text" id="name" name="name" required placeholder="Your name" />
+          <input type="text" id="name" name="name" required maxlength="100" placeholder="Your name" />
         </div>
         <div class="form-group">
           <label for="email">Email</label>
-          <input type="email" id="email" name="email" required placeholder="you@example.com" />
+          <input type="email" id="email" name="email" required maxlength="100" placeholder="you@example.com" />
         </div>
         <div class="form-group">
           <label for="message">Message</label>
-          <textarea id="message" name="message" required placeholder="What's on your mind?"></textarea>
+          <textarea id="message" name="message" required maxlength="2000" placeholder="What's on your mind?"></textarea>
         </div>
         <button type="submit" class="submit-btn" id="submit-btn">Send Message</button>
       </form>
@@ -170,12 +219,14 @@ function contactPageHtml() {
 </html>`;
 }
 
-// Success page shown after a form submission
+// Success page shown after a form submission (HTML escaped against XSS)
 function successPage(name) {
+  const safeName = escapeHtml(name);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Message Sent | Faizan Firdousi</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
@@ -198,7 +249,7 @@ function successPage(name) {
   <div class="card">
     <div class="icon">✉️</div>
     <h1>Message received!</h1>
-    <p>Thanks, ${name}. I'll get back to you soon.</p>
+    <p>Thanks, ${safeName}. I'll get back to you soon.</p>
     <a href="/contact">← Send another message</a>
   </div>
 </body>
@@ -218,29 +269,56 @@ app.get(['/', '/contact', '/contact/'], (req, res) => {
 
 // Handle form submission — both /contact/submit and /submit (after ingress rewrite)
 app.post(['/contact/submit', '/submit'], (req, res) => {
-  const { name, email, message } = req.body;
+  const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
 
-  // Basic validation: all fields required
-  if (!name || !email || !message) {
-    return res.status(400).send('All fields are required.');
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).send(contactPageHtml('Too many submissions. Please wait a minute before trying again.'));
   }
 
-  // Log to stdout — visible via `kubectl logs`
-  // JSON format makes it easy to parse with log aggregation tools
+  const { name, email, message } = req.body || {};
+
+  // Strict input validation
+  if (typeof name !== 'string' || typeof email !== 'string' || typeof message !== 'string') {
+    return res.status(400).send(contactPageHtml('Invalid form payload format.'));
+  }
+
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const trimmedMessage = message.trim();
+
+  if (!trimmedName || !trimmedEmail || !trimmedMessage) {
+    return res.status(400).send(contactPageHtml('All fields are required.'));
+  }
+
+  if (trimmedName.length > 100 || trimmedEmail.length > 100 || trimmedMessage.length > 2000) {
+    return res.status(400).send(contactPageHtml('Input exceeds maximum allowed length.'));
+  }
+
+  if (!EMAIL_REGEX.test(trimmedEmail)) {
+    return res.status(400).send(contactPageHtml('Please provide a valid email address.'));
+  }
+
+  // Log sanitized structured submission
   console.log(JSON.stringify({
     event: 'contact_form_submission',
     timestamp: new Date().toISOString(),
-    name: name.slice(0, 100),       // Truncate to prevent log flooding
-    email: email.slice(0, 100),
-    message: message.slice(0, 1000),
-    podName: process.env.HOSTNAME,  // HOSTNAME env var contains the Pod name in K8s!
+    name: trimmedName.replace(/[\r\n]/g, ' '),
+    email: trimmedEmail.replace(/[\r\n]/g, ' '),
+    messageLength: trimmedMessage.length,
+    podName: process.env.HOSTNAME || 'local',
   }));
 
-  res.send(successPage(name));
+  res.setHeader('Content-Type', 'text/html');
+  res.send(successPage(trimmedName));
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).send(contactPageHtml('Page not found.'));
+});
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[contact] Server listening on port ${PORT}`);
 });
+

@@ -1,20 +1,53 @@
 # manifests/ingress.yaml
 #
-# Traefik routing for the entire portfolio.
-# k3s ships Traefik as the built-in ingress controller — we use its IngressRoute CRD
-# for path-based routing and StripPrefix middlewares to rewrite URLs before forwarding.
-#
-# HOW TRAFFIC FLOWS:
-#   1. A browser request hits the k3d load balancer on port 80 (mapped from localhost:8080)
-#   2. The load balancer forwards to the Traefik controller Pod in kube-system
-#   3. Traefik reads this IngressRoute and matches the request path to a backend Service
-#   4. StripPrefix middleware removes the section prefix (/about, /blog, etc.) before forwarding
-#   5. The Service routes to a healthy Pod
-#
-# Cross-namespace routing:
-#   Services live in different namespaces. Traefik IngressRoute supports a `namespace`
-#   field on each backend Service — no ExternalName aliases needed.
-#   (Traefik rejects ExternalName services by default.)
+# Hardened Traefik routing for the entire portfolio.
+# Features:
+#   - Path-based routing with stripPrefix middlewares
+#   - Security headers (HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+#   - Global & Contact-specific rate limiting
+#   - Request body buffering & size limits
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: default
+spec:
+  headers:
+    frameDeny: false
+    customResponseHeaders:
+      X-Frame-Options: "SAMEORIGIN"
+      X-Content-Type-Options: "nosniff"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+    browserXssFilter: true
+    contentTypeNosniff: true
+    stsSeconds: 63072000
+    stsIncludeSubdomains: true
+    stsPreload: true
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: global-ratelimit
+  namespace: default
+spec:
+  rateLimit:
+    average: 100
+    burst: 50
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: request-buffer
+  namespace: default
+spec:
+  buffering:
+    maxRequestBodyBytes: 1048576  # 1 MB max request body to prevent memory DoS
+    memRequestBodyBytes: 262144   # 256 KB memory buffer
 
 ---
 apiVersion: traefik.io/v1alpha1
@@ -81,10 +114,13 @@ spec:
   entryPoints:
     - web
   routes:
-    # More specific paths first; catch-all last.
     - match: PathPrefix(`/api`)
       kind: Rule
       priority: 20
+      middlewares:
+        - name: security-headers
+        - name: global-ratelimit
+        - name: request-buffer
       services:
         - name: proxy
           namespace: proxy
@@ -95,6 +131,8 @@ spec:
       priority: 20
       middlewares:
         - name: strip-about
+        - name: security-headers
+        - name: global-ratelimit
       services:
         - name: about
           namespace: about
@@ -105,6 +143,8 @@ spec:
       priority: 20
       middlewares:
         - name: strip-projects
+        - name: security-headers
+        - name: global-ratelimit
       services:
         - name: projects
           namespace: projects
@@ -115,6 +155,8 @@ spec:
       priority: 20
       middlewares:
         - name: strip-blog
+        - name: security-headers
+        - name: global-ratelimit
       services:
         - name: blog
           namespace: blog
@@ -125,6 +167,8 @@ spec:
       priority: 20
       middlewares:
         - name: strip-skills
+        - name: security-headers
+        - name: global-ratelimit
       services:
         - name: skills
           namespace: skills
@@ -135,6 +179,9 @@ spec:
       priority: 20
       middlewares:
         - name: strip-contact
+        - name: security-headers
+        - name: global-ratelimit
+        - name: request-buffer
       services:
         - name: contact
           namespace: contact
@@ -143,6 +190,9 @@ spec:
     - match: PathPrefix(`/`)
       kind: Rule
       priority: 1
+      middlewares:
+        - name: security-headers
+        - name: global-ratelimit
       services:
         - name: frontend
           namespace: frontend

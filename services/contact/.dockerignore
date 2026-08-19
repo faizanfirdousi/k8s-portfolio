@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env*
+*.md
+*.pem
+*.key
+*.log
+node_modules
+dist
+.DS_Store
+.kube

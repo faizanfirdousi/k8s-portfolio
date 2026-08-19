@@ -136,7 +136,8 @@ func main() {
 		if !allowMethod(w, r, http.MethodGet) {
 			return
 		}
-		setCORS(w)
+		setCORS(w, r)
+		setSecurityHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
 
 		topology, err := fetchTopology(r.Context(), clientset)
@@ -152,7 +153,8 @@ func main() {
 		if !allowMethod(w, r, http.MethodGet) {
 			return
 		}
-		setCORS(w)
+		setCORS(w, r)
+		setSecurityHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
 
 		namespace := r.URL.Query().Get("namespace")
@@ -181,10 +183,13 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,  // Slowloris attack protection
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,          // 1 MB max header
 	}
 
 	log.Fatal(server.ListenAndServe())
@@ -195,7 +200,8 @@ func handlePodDetail(clientset *kubernetes.Clientset) http.HandlerFunc {
 		if !allowMethod(w, r, http.MethodGet) {
 			return
 		}
-		setCORS(w)
+		setCORS(w, r)
+		setSecurityHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
 
 		// Path: /api/pods/{namespace}/{name}
@@ -207,7 +213,7 @@ func handlePodDetail(clientset *kubernetes.Clientset) http.HandlerFunc {
 		}
 
 		namespace, name := parts[0], parts[1]
-		if !portfolioNamespaces[namespace] {
+		if len(namespace) > 63 || len(name) > 253 || !portfolioNamespaces[namespace] {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "Pod not found"})
 			return
 		}
@@ -568,13 +574,32 @@ func max(a, b int) int {
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-func setCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+func setSecurityHeaders(w http.ResponseWriter) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+}
+
+func setCORS(w http.ResponseWriter, r *http.Request) {
+	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGINS")
+	origin := r.Header.Get("Origin")
+	if allowedOrigin != "" && origin != "" {
+		for _, o := range strings.Split(allowedOrigin, ",") {
+			if strings.TrimSpace(o) == origin || strings.TrimSpace(o) == "*" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
 func allowMethod(w http.ResponseWriter, r *http.Request, method string) bool {
-	setCORS(w)
+	setCORS(w, r)
+	setSecurityHeaders(w)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return false
