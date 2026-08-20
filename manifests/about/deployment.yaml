@@ -34,8 +34,8 @@ spec:
 
       containers:
         - name: about
-          image: portfolio/about:local
-          imagePullPolicy: Never
+          image: faizanfirdousi/portfolio-about:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 8080

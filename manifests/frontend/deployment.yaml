@@ -29,8 +29,8 @@ spec:
 
       containers:
         - name: frontend
-          image: portfolio/frontend:local
-          imagePullPolicy: Never
+          image: faizanfirdousi/portfolio-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           livenessProbe:

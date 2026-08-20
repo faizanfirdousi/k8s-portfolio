@@ -32,8 +32,8 @@ spec:
 
       containers:
         - name: proxy
-          image: portfolio/proxy:local
-          imagePullPolicy: Never
+          image: faizanfirdousi/portfolio-proxy:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 8080

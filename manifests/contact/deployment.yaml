@@ -29,8 +29,8 @@ spec:
 
       containers:
         - name: contact
-          image: portfolio/contact:local
-          imagePullPolicy: Never
+          image: faizanfirdousi/portfolio-contact:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           env:

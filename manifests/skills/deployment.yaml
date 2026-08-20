@@ -29,8 +29,8 @@ spec:
 
       containers:
         - name: skills
-          image: portfolio/skills:local
-          imagePullPolicy: Never
+          image: faizanfirdousi/portfolio-skills:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           livenessProbe:
