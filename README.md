@@ -63,7 +63,7 @@ Browser → Traefik Ingress → Service → Pod (per section)
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Orchestration:** Kubernetes
 - **Ingress:** Traefik
