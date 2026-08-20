@@ -1,195 +1,85 @@
-# Faizan Firdousi — K8s Portfolio
+# Faizan Firdousi's K8s Portfolio
 
-A personal portfolio site that runs **on** a real Kubernetes cluster.
-Each page you visit is a live Pod. The topology graph shows the cluster running underneath in real-time.
+> A personal portfolio that doesn't just *run* on Kubernetes it *is* Kubernetes.
 
-## Architecture
+---
 
+## About
+
+Most portfolios are a single static site with a few pretty animations. I wanted mine to actually demonstrate the thing I'm good at, so instead of building a page *about* my infrastructure skills, I built a page that *is* my infrastructure.
+
+Every section of this site - home, about, projects, blog, contact - is its own standalone microservice, deployed as a real Pod in a real Kubernetes cluster. Nothing here is a simulation or a mock diagram sitting next to the site for show.
+
+The centerpiece is a live, interactive topology graph on the homepage. It doesn't render a static image of "here's roughly how my cluster looks" - it queries the Kubernetes API in real time and draws the actual, current state of the cluster: every Pod, Service, and Ingress route, as they exist *right now*. Scale a deployment, kill a pod, redeploy a service - watch the graph update live.
+
+---
+
+## How It Works
+
+### Micro-frontends, but actually on Kubernetes
+
+Instead of one monolithic frontend serving every route, each page of the site is its own deployment:
+
+- Visit `/about` → Traefik routes you straight to a dedicated Nginx pod serving static HTML.
+- Visit `/projects` → a Node/Express pod spins into action, fetching live stats from the GitHub API.
+- Visit `/blog` → a separate Node/Express pod renders Markdown into blog posts on the fly.
+
+Each route, each pod, each service — genuinely isolated, genuinely independent.
+
+### Self-documenting infrastructure
+
+The site quite literally shows you its own guts. The topology graph on the homepage isn't decorative - it's a live window into the cluster:
+
+- If a pod crashes, you'll see it disappear.
+- If something scales up, new nodes appear in the graph.
+- If a deployment rolls out, you're watching real infrastructure change in real time, not a canned animation.
+
+### The live cluster proxy
+
+Powering the topology graph is a small Go service I wrote myself - a proxy that securely reads from the Kubernetes API (read-only) and exposes a clean topology endpoint for the frontend to consume. The React frontend, built with React Flow, takes that data and turns it into the interactive graph you see on screen.
+
+---
+
+## Architecture Flow
+
+```text
+Browser → Traefik Ingress → Service → Pod (per section)
+                 ↓
+          /api/topology → proxy Pod (Go) → Kubernetes API (read-only)
 ```
-Browser → Traefik → Service → Pod (per section)
-                ↓
-         /api/topology → proxy Pod (Go) → Kubernetes API (read-only)
-```
+
+---
+
+## Route Map
 
 | Path | Namespace | Service | What it runs |
-|------|-----------|---------|-------------|
-| `/` | `frontend` | frontend | React app + topology graph |
-| `/about` | `about` | about | Nginx + static HTML |
-| `/projects` | `projects` | projects | Node/Express + GitHub API |
+|------|-----------|---------|---------------|
+| `/` | `frontend` | frontend | React app + live topology graph |
+| `/about` | `about` | about | Nginx serving static HTML |
+| `/projects` | `projects` | projects | Node/Express + GitHub API integration |
 | `/blog` | `blog` | blog | Node/Express + Markdown renderer |
-| `/contact` | `contact` | contact | Node/Express + contact form |
-| `/api/*` | `proxy` | proxy | Go binary reading K8s API |
+| `/contact` | `contact` | contact | Node/Express + contact form API |
+| `/api/*` | `proxy` | proxy | Custom Go binary reading the K8s API |
 
-## Local Development
+---
 
-### Prerequisites
+## 🛠️ Tech Stack
 
-- [Docker](https://docs.docker.com/get-docker/)
-- [k3d](https://k3d.io/#installation) — `curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash`
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- **Orchestration:** Kubernetes
+- **Ingress:** Traefik
+- **Frontend:** React + React Flow (for the live topology graph)
+- **Backend services:** Node/Express, Nginx
+- **Cluster proxy:** Go (custom-built, read-only K8s API access)
+- **Content:** Markdown-driven blog rendering
 
-### Start the cluster
+---
 
-```bash
-./scripts/local-up.sh
-```
+## Why Build It This Way
 
-This script:
-1. Creates a k3d cluster (1 server + 2 agents, mapped to localhost:8080)
-2. Waits for Traefik (k3s built-in ingress controller)
-3. Builds all 6 Docker images locally
-4. Loads images into the cluster (`k3d image import`)
-5. Applies all Kubernetes manifests
+Anyone can list "Kubernetes" on a resume. I wanted a portfolio that proves it instead of claiming it — where the infrastructure isn't a backstage detail but the whole point of the show. If it's live and you can watch it work, it's a lot harder to fake.
 
-### Verify everything is running
+---
 
-```bash
-kubectl get pods -A
-# NAMESPACE      NAME                               READY   STATUS    RESTARTS
-# about          about-xxx                          1/1     Running   0
-# projects       projects-xxx                       1/1     Running   0
-# blog           blog-xxx                           1/1     Running   0
-# contact        contact-xxx                        1/1     Running   0
-# proxy          proxy-xxx                          1/1     Running   0
-# frontend       frontend-xxx                       1/1     Running   0
-```
+## Contact
 
-### Access the portfolio
-
-```
-http://localhost:8080            → Main portfolio
-http://localhost:8080/about      → About section
-http://localhost:8080/projects   → Projects (live GitHub stats)
-http://localhost:8080/blog       → Blog posts
-http://localhost:8080/contact    → Contact form
-http://localhost:8080/api/topology → Live cluster topology JSON
-```
-
-### Tear down
-
-```bash
-./scripts/local-down.sh
-```
-
-## Production Deployment (Phase 5)
-
-> [!NOTE]
-> Requires a VPS with Ubuntu 22.04 and a domain name. 
-
-For production, it is highly recommended to build your Docker images locally and push them to a container registry like Docker Hub, rather than building them on your VPS.
-
-### 1. Build and Push Images
-```bash
-export DOCKER_USER="yourusername"
-# Example for frontend:
-docker build -t $DOCKER_USER/portfolio-frontend:latest ./services/frontend
-docker push $DOCKER_USER/portfolio-frontend:latest
-# Repeat for about, projects, blog, contact, proxy
-```
-*Note: Update the `image:` paths in your `manifests` to point to your Docker Hub images before applying them to production.*
-
-### 2. Provision the VPS (AWS EC2, DigitalOcean, etc.)
-Transfer and run the provision script on your fresh Ubuntu instance:
-```bash
-scp scripts/aws-provision.sh ubuntu@<your-vps-ip>:~/
-ssh ubuntu@<your-vps-ip>
-./aws-provision.sh
-```
-
-### 3. Deploy
-On your VPS, clone your repository and apply the updated manifests:
-```bash
-git clone https://github.com/faizanfirdousi/k8s-portfolio.git
-cd k8s-portfolio
-kubectl apply -f manifests/namespaces.yaml
-kubectl apply -R -f manifests/
-```
-
-## Security
-
-This section documents the security review required by Phase 6.
-
-### RBAC
-
-The cluster-read proxy runs with a `ServiceAccount` bound to a `ClusterRole` with **read-only** access to pods and nodes only:
-
-```yaml
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "nodes"]
-    verbs: ["get", "list", "watch"]
-    # No write verbs. No secrets. No configmaps. No other resources.
-```
-
-**Verified with:**
-```bash
-# Can it list pods? YES (expected)
-kubectl auth can-i list pods --as=system:serviceaccount:proxy:topology-reader
-
-# Can it delete pods? NO (expected)
-kubectl auth can-i delete pods --as=system:serviceaccount:proxy:topology-reader
-
-# Can it read secrets? NO (expected)
-kubectl auth can-i get secrets --as=system:serviceaccount:proxy:topology-reader
-```
-
-### Network isolation (Phase 6)
-
-- NetworkPolicy resources restrict inter-pod communication
-- Section pods cannot reach each other or the proxy directly
-- Only Traefik can initiate connections to section pods
-- The proxy can only be reached via the IngressRoute at `/api/*`
-
-### API server exposure
-
-- The Kubernetes API server has no public NodePort or LoadBalancer
-- Only the proxy Pod (inside the cluster) can call the API server
-- The API server is not reachable from the internet
-
-### Rate limiting
-
-- `/api/topology` is rate-limited at the Traefik level (100 req/min per IP)
-
-## Tech Stack
-
-| Component | Technology | Why |
-|-----------|-----------|-----|
-| Local cluster | k3d | Docker-native, fast setup, easy multi-node |
-| Production cluster | k3s | Lightweight, single binary, perfect for VPS |
-| Ingress | Traefik (k3s built-in) | Lightweight, ships with k3s/k3d, IngressRoute CRDs |
-| TLS | cert-manager + Let's Encrypt | Automated certificate management |
-| Cluster proxy | Go + client-go | Tiny binary, native K8s library, low memory |
-| About section | Nginx + HTML | Static content, no runtime needed |
-| Projects section | Node/Express | GitHub API integration, caching |
-| Blog section | Node/Express + Markdown | Server-rendered markdown posts |
-| Contact section | Node/Express | Form handling, stdout logging |
-| Frontend | React + Vite + React Flow | Topology graph, portfolio shell |
-
-## Repository Structure
-
-```
-k8s-portfolio/
-├── README.md
-├── k3d-config.yaml                 ← Local cluster definition
-├── manifests/
-│   ├── namespaces.yaml             ← All namespace declarations
-│   ├── cross-namespace-services.yaml ← ExternalName services for Ingress routing
-│   ├── ingress.yaml                ← Traefik IngressRoute + Middleware routing rules
-│   ├── about/                      ← About section K8s resources
-│   ├── projects/                   ← Projects section K8s resources
-│   ├── blog/                       ← Blog section K8s resources
-│   ├── contact/                    ← Contact section K8s resources
-│   ├── proxy/                      ← Proxy RBAC + deployment
-│   ├── frontend/                   ← Frontend deployment
-│   └── network-policies/           ← NetworkPolicy resources (Phase 6)
-├── services/
-│   ├── about/                      ← Dockerfile + static HTML
-│   ├── projects/                   ← Dockerfile + Node service
-│   ├── blog/                       ← Dockerfile + Node service + posts/
-│   ├── contact/                    ← Dockerfile + Node service
-│   ├── proxy/                      ← Dockerfile + Go binary
-│   └── frontend/                   ← Dockerfile + React app
-└── scripts/
-    ├── local-up.sh                 ← Start everything locally
-    └── local-down.sh               ← Tear down everything
-```
+Got questions about the architecture, or just want to talk Kubernetes? Reach out through the `/contact` page — yes, that one's a real pod too.
