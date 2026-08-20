@@ -12,11 +12,26 @@ export interface ContainerInfo {
   image?: string;
 }
 
+export interface NodeResources {
+  cpuCapacity?: string;
+  memoryCapacity?: string;
+  cpuAllocatable?: string;
+  memoryAllocatable?: string;
+  maxPods?: string;
+}
+
 export interface TopologyNode {
   name: string;
   status: string;
   podCount: number;
+  roles?: string[];
+  kubeletVersion?: string;
+  osImage?: string;
+  architecture?: string;
+  containerRuntime?: string;
+  resources?: NodeResources;
 }
+
 
 export interface TopologyPod {
   name: string;

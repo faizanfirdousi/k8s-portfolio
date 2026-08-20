@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import SpriteText from 'three-spritetext';
 import * as THREE from 'three';
-import type { TopologyPod } from '../hooks/useTopology';
+import type { TopologyPod, TopologyNode } from '../hooks/useTopology';
 import { ROUTE_BY_NAMESPACE, type PortfolioRoute } from '../config/portfolioRoutes';
 
 export type { PortfolioRoute };
@@ -18,6 +18,8 @@ interface GraphNode {
   color: string;
   val: number;
   nodeName?: string;
+  cpuPct?: number;   // 0-100 actual node CPU usage
+  memPct?: number;   // 0-100 actual node mem usage
   x?: number;
   y?: number;
   z?: number;
@@ -32,88 +34,98 @@ interface GraphLink {
 
 interface ClusterScene3DProps {
   pods: TopologyPod[];
+  nodes: TopologyNode[];
   clusterHealthy: boolean;
   onNodeSelect: (route: PortfolioRoute | null) => void;
   darkMode: boolean;
 }
 
-const CONTROL_LINK_DIST = 85;
-const POD_LINK_DIST = 42;
+const CONTROL_LINK_DIST = 90;
+const POD_LINK_DIST = 45;
 
-function topologySignature(pods: TopologyPod[]): string {
-  return pods
+// Stable colors per node index so they don't flicker on re-render
+const NODE_COLORS = ['#0284c7', '#0d9488', '#7c3aed', '#db2777', '#d97706', '#16a34a'];
+
+function topologySignature(pods: TopologyPod[], nodes: TopologyNode[]): string {
+  const podSig = pods
     .map((p) => `${p.namespace}|${p.name}|${p.status}|${p.node ?? ''}`)
     .sort()
     .join('\n');
+  const nodeSig = nodes
+    .map((n) => `${n.name}|${n.status}|${n.podCount}`)
+    .sort()
+    .join('\n');
+  return `${nodeSig}::${podSig}`;
 }
 
 /**
- * Builds a hierarchical topology graph:
- * Control Plane (server-0)
- *   ├── Worker Node 1 (agent-0) ──> [frontend, about, projects pods]
- *   └── Worker Node 2 (agent-1) ──> [skills, blog, contact, proxy pods]
+ * Builds a hierarchical topology graph driven 100% by live API data.
+ *
+ * Topology:
+ *   API Server (control-plane virtual node)
+ *     └── k3s-node / k3d-agent-0 / k3d-agent-1 … (real K8s nodes)
+ *           └── pod-about / pod-frontend … (real pods on that node)
+ *
+ * Handles single-node prod cluster and multi-node k3d equally.
  */
-function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink[] } {
-  const nodes: GraphNode[] = [];
+function buildGraph(
+  pods: TopologyPod[],
+  nodes: TopologyNode[],
+): { nodes: GraphNode[]; links: GraphLink[] } {
+  const graphNodes: GraphNode[] = [];
   const links: GraphLink[] = [];
 
-  // 1. Control Plane Node
-  nodes.push({
+  // ── 1. Virtual Control Plane node ──────────────────────────────────────────
+  graphNodes.push({
     id: 'control-plane',
-    name: 'Control Plane (server-0)',
+    name: 'API Server',
     type: 'control-plane',
     color: '#4f46e5',
     val: 14,
-    y: 45,
+    y: 50,
   });
 
-  // 2. Two Worker Nodes
-  const worker1Id = 'worker-node-1';
-  const worker2Id = 'worker-node-2';
+  // ── 2. Real worker nodes from topology ─────────────────────────────────────
+  // Filter out nodes that have the control-plane role — those are API server roles
+  // and we already represent the API server above.
+  // On k3s single-node, the only node IS both control-plane + worker, so we show it.
+  const workerNodes = nodes.length > 0 ? nodes : [];
 
-  nodes.push({
-    id: worker1Id,
-    name: 'Worker Node 1 (agent-0)',
-    type: 'worker-node',
-    nodeName: 'k3d-portfolio-agent-0',
-    color: '#0284c7',
-    val: 11,
+  // Map from K8s node name → graph node id
+  const nodeIdMap = new Map<string, string>();
+
+  workerNodes.forEach((node, idx) => {
+    const gid = `worker-${idx}`;
+    nodeIdMap.set(node.name, gid);
+    const color = NODE_COLORS[idx % NODE_COLORS.length];
+
+    graphNodes.push({
+      id: gid,
+      name: node.name,
+      type: 'worker-node',
+      nodeName: node.name,
+      color,
+      val: 11,
+      status: node.status,
+    });
+
+    // Link control-plane → worker node
+    links.push({
+      source: 'control-plane',
+      target: gid,
+      linkType: 'control-link',
+      value: 3,
+    });
   });
 
-  nodes.push({
-    id: worker2Id,
-    name: 'Worker Node 2 (agent-1)',
-    type: 'worker-node',
-    nodeName: 'k3d-portfolio-agent-1',
-    color: '#0d9488',
-    val: 11,
-  });
-
-  // Links from Control Plane to both Worker Nodes
-  links.push({
-    source: 'control-plane',
-    target: worker1Id,
-    linkType: 'control-link',
-    value: 3,
-  });
-
-  links.push({
-    source: 'control-plane',
-    target: worker2Id,
-    linkType: 'control-link',
-    value: 3,
-  });
-
-  // 3. Pods: attached to respective worker node
-  const node1AssignedNs = new Set(['frontend', 'about', 'projects']);
-
+  // ── 3. Pods ─────────────────────────────────────────────────────────────────
   if (pods.length > 0) {
     for (const pod of pods) {
       const podKey = `pod-${pod.namespace}-${pod.name}`;
       const route = ROUTE_BY_NAMESPACE[pod.namespace];
       const podColor = route?.color ?? '#6366f1';
 
-      nodes.push({
+      graphNodes.push({
         id: podKey,
         name: pod.name,
         type: 'pod',
@@ -123,18 +135,20 @@ function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink
         val: 7,
       });
 
-      // Target worker node assignment
-      let targetWorker = worker1Id;
-      if (pod.node) {
-        if (pod.node.includes('agent-1') || pod.node.includes('node-2')) {
-          targetWorker = worker2Id;
-        } else if (pod.node.includes('agent-0') || pod.node.includes('node-1')) {
-          targetWorker = worker1Id;
-        } else {
-          targetWorker = node1AssignedNs.has(pod.namespace) ? worker1Id : worker2Id;
+      // Determine which worker node this pod belongs to
+      let targetWorker = 'worker-0'; // fallback to first node
+
+      if (pod.node && nodeIdMap.has(pod.node)) {
+        // Exact match on real node name — this is the correct path for prod
+        targetWorker = nodeIdMap.get(pod.node)!;
+      } else if (pod.node) {
+        // Fuzzy fallback: match partial node name (handles k3d naming)
+        for (const [nodeName, gid] of nodeIdMap.entries()) {
+          if (pod.node.includes(nodeName) || nodeName.includes(pod.node)) {
+            targetWorker = gid;
+            break;
+          }
         }
-      } else {
-        targetWorker = node1AssignedNs.has(pod.namespace) ? worker1Id : worker2Id;
       }
 
       links.push({
@@ -147,9 +161,11 @@ function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink
   } else {
     // Fallback placeholder pods when waiting for cluster data
     const allRoutes = Object.values(ROUTE_BY_NAMESPACE);
+    const fallbackWorker = workerNodes.length > 0 ? 'worker-0' : 'control-plane';
+
     for (const route of allRoutes) {
       const podKey = `pod-${route.namespace}`;
-      nodes.push({
+      graphNodes.push({
         id: podKey,
         name: `${route.namespace}-pod`,
         type: 'pod',
@@ -158,10 +174,8 @@ function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink
         color: route.color,
         val: 7,
       });
-
-      const targetWorker = node1AssignedNs.has(route.namespace) ? worker1Id : worker2Id;
       links.push({
-        source: targetWorker,
+        source: fallbackWorker,
         target: podKey,
         linkType: 'pod-link',
         value: 1,
@@ -169,7 +183,7 @@ function buildGraph(pods: TopologyPod[]): { nodes: GraphNode[]; links: GraphLink
     }
   }
 
-  return { nodes, links };
+  return { nodes: graphNodes, links };
 }
 
 function routeForNode(node: GraphNode): PortfolioRoute | null {
@@ -179,7 +193,12 @@ function routeForNode(node: GraphNode): PortfolioRoute | null {
   return null;
 }
 
-export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: ClusterScene3DProps) {
+export default function ClusterScene3D({
+  pods,
+  nodes,
+  onNodeSelect,
+  darkMode,
+}: ClusterScene3DProps) {
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const linkConfigured = useRef(false);
@@ -187,8 +206,8 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
   const [width, setWidth] = useState(800);
   const [graphHeight, setGraphHeight] = useState(540);
 
-  const signature = useMemo(() => topologySignature(pods), [pods]);
-  const graphData = useMemo(() => buildGraph(pods), [signature]);
+  const signature = useMemo(() => topologySignature(pods, nodes), [pods, nodes]);
+  const graphData = useMemo(() => buildGraph(pods, nodes), [signature]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -234,21 +253,22 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
     }
     const chargeForce = fg.d3Force('charge');
     if (chargeForce) {
-      chargeForce.strength(-150);
+      chargeForce.strength(-160);
     }
   }, []);
 
   useEffect(() => {
+    linkConfigured.current = false;
     configureForces();
   }, [configureForces, graphData]);
 
-  // 3D Object rendering for Control Plane, Worker Nodes, and Pods
+  // ── 3D object rendering ────────────────────────────────────────────────────
   const nodeThreeObject = useCallback(
     (node: GraphNode) => {
       const group = new THREE.Group();
 
       if (node.type === 'control-plane') {
-        // Control Plane: Octahedron core + Torus wireframe
+        // Octahedron core + torus wireframe
         const geom = new THREE.OctahedronGeometry(12, 0);
         const mat = new THREE.MeshStandardMaterial({
           color: new THREE.Color(darkMode ? '#818cf8' : '#4f46e5'),
@@ -257,10 +277,8 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
           emissive: new THREE.Color(darkMode ? '#4338ca' : '#4f46e5'),
           emissiveIntensity: darkMode ? 0.5 : 0.2,
         });
-        const mesh = new THREE.Mesh(geom, mat);
-        group.add(mesh);
+        group.add(new THREE.Mesh(geom, mat));
 
-        // Orbital wireframe
         const wireGeom = new THREE.TorusGeometry(16, 0.35, 8, 24);
         const wireMat = new THREE.MeshBasicMaterial({
           color: darkMode ? '#a5b4fc' : '#6366f1',
@@ -272,7 +290,7 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
         ring.rotation.x = Math.PI / 3;
         group.add(ring);
 
-        const sprite = new SpriteText('⚡ Control Plane\n(API Server · k3d-server-0)');
+        const sprite = new SpriteText('⚡ API Server\n(Control Plane)');
         sprite.color = darkMode ? '#e0e7ff' : '#1e1b4b';
         sprite.textHeight = 4.2;
         sprite.fontFace = 'JetBrains Mono, monospace';
@@ -280,7 +298,7 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
         sprite.position.y = 20;
         group.add(sprite);
       } else if (node.type === 'worker-node') {
-        // Worker Node: Box
+        // Box geometry for worker node
         const geom = new THREE.BoxGeometry(15, 12, 15);
         const mat = new THREE.MeshStandardMaterial({
           color: new THREE.Color(node.color),
@@ -289,10 +307,15 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
           emissive: new THREE.Color(node.color),
           emissiveIntensity: darkMode ? 0.35 : 0.15,
         });
-        const mesh = new THREE.Mesh(geom, mat);
-        group.add(mesh);
+        group.add(new THREE.Mesh(geom, mat));
 
-        const sprite = new SpriteText(`🖥️ ${node.name}`);
+        // Shorten long node names for readability
+        const displayName = node.name.length > 20
+          ? node.name.slice(0, 8) + '…' + node.name.slice(-8)
+          : node.name;
+
+        const label = `🖥️ ${displayName}`;
+        const sprite = new SpriteText(label);
         sprite.color = darkMode ? '#f1f5f9' : '#0f172a';
         sprite.textHeight = 3.8;
         sprite.fontFace = 'JetBrains Mono, monospace';
@@ -300,7 +323,7 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
         sprite.position.y = 15;
         group.add(sprite);
       } else {
-        // Pod: Colored Sphere
+        // Sphere for pod
         const isHealthy = node.status === 'Running' || node.status === 'Succeeded';
         const geom = new THREE.SphereGeometry(6, 20, 20);
         const mat = new THREE.MeshStandardMaterial({
@@ -310,11 +333,22 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
           emissive: new THREE.Color(node.color),
           emissiveIntensity: isHealthy ? (darkMode ? 0.35 : 0.2) : 0.7,
         });
-        const mesh = new THREE.Mesh(geom, mat);
-        group.add(mesh);
+        group.add(new THREE.Mesh(geom, mat));
 
         const route = node.namespace ? ROUTE_BY_NAMESPACE[node.namespace] : null;
-        const emoji = route ? (route.id === 'home' ? '⌂' : route.id === 'about' ? '◈' : route.id === 'projects' ? '◧' : route.id === 'skills' ? '◇' : route.id === 'blog' ? '◎' : '◉') : '●';
+        const emoji = route
+          ? route.id === 'home'
+            ? '⌂'
+            : route.id === 'about'
+            ? '◈'
+            : route.id === 'projects'
+            ? '◧'
+            : route.id === 'skills'
+            ? '◇'
+            : route.id === 'blog'
+            ? '◎'
+            : '◉'
+          : '●';
         const sprite = new SpriteText(`${emoji} ${node.namespace ?? 'pod'}`);
         sprite.color = darkMode ? '#e2e8f0' : '#1e293b';
         sprite.textHeight = 3.4;
@@ -353,6 +387,12 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
     [onNodeSelect],
   );
 
+  // Legend: show real node names
+  const workerLegend = nodes.slice(0, 4).map((n, i) => ({
+    color: NODE_COLORS[i % NODE_COLORS.length],
+    label: n.name.length > 18 ? n.name.slice(0, 16) + '…' : n.name,
+  }));
+
   return (
     <div
       ref={containerRef}
@@ -375,15 +415,22 @@ export default function ClusterScene3D({ pods, onNodeSelect, darkMode }: Cluster
           <span className="h-2 w-2 rounded-sm bg-indigo-600 dark:bg-indigo-500" /> Control Plane
         </span>
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
-        <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
-          <span className="h-2 w-2 rounded-sm bg-sky-600 dark:bg-sky-500" /> Worker 01
-        </span>
-        <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-400">
-          <span className="h-2 w-2 rounded-sm bg-teal-600 dark:bg-teal-500" /> Worker 02
-        </span>
+        {workerLegend.map(({ color, label }) => (
+          <span
+            key={label}
+            className="flex items-center gap-1.5"
+            style={{ color: darkMode ? color : color }}
+          >
+            <span
+              className="h-2 w-2 rounded-sm"
+              style={{ backgroundColor: color }}
+            />{' '}
+            {label}
+          </span>
+        ))}
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
         <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-          <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500" /> Hosted Pods
+          <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500" /> Pods
         </span>
       </div>
 

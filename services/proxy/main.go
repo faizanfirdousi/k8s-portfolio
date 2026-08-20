@@ -28,16 +28,6 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var portfolioNamespaces = map[string]bool{
-	"about":    true,
-	"projects": true,
-	"skills":   true,
-	"blog":     true,
-	"contact":  true,
-	"proxy":    true,
-	"frontend": true,
-}
-
 // ── API response types ─────────────────────────────────────────────────────────
 
 type ResourceSummary struct {
@@ -69,10 +59,24 @@ type PodInfo struct {
 	ResourceLimits   *ResourceSummary  `json:"resourceLimits,omitempty"`
 }
 
+type NodeResources struct {
+	CPUCapacity       string `json:"cpuCapacity,omitempty"`
+	MemoryCapacity    string `json:"memoryCapacity,omitempty"`
+	CPUAllocatable    string `json:"cpuAllocatable,omitempty"`
+	MemoryAllocatable string `json:"memoryAllocatable,omitempty"`
+	MaxPods           string `json:"maxPods,omitempty"`
+}
+
 type NodeInfo struct {
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	PodCount int    `json:"podCount"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	PodCount         int            `json:"podCount"`
+	Roles            []string       `json:"roles,omitempty"`
+	KubeletVersion   string         `json:"kubeletVersion,omitempty"`
+	OSImage          string         `json:"osImage,omitempty"`
+	Architecture     string         `json:"architecture,omitempty"`
+	ContainerRuntime string         `json:"containerRuntime,omitempty"`
+	Resources        *NodeResources `json:"resources,omitempty"`
 }
 
 type TopologyResponse struct {
@@ -105,10 +109,30 @@ type EventsResponse struct {
 }
 
 type MetricsResponse struct {
+	Namespace           string `json:"namespace,omitempty"`
 	TotalPods           string `json:"totalPods"`
+	RunningPods         string `json:"runningPods,omitempty"`
 	TotalCpuRequests    string `json:"totalCpuRequests"`
 	TotalMemoryRequests string `json:"totalMemoryRequests"`
-	FetchedAt           string `json:"fetchedAt"`
+	TotalCpuLimits      string `json:"totalCpuLimits,omitempty"`
+	TotalMemoryLimits   string `json:"totalMemoryLimits,omitempty"`
+	// cAdvisor actual usage (only when ?type=usage)
+	TotalCpuUsage    string `json:"totalCpuUsage,omitempty"`
+	TotalMemoryUsage string `json:"totalMemoryUsage,omitempty"`
+	// Traefik request rate (only when Traefik scrape is active)
+	RequestsPerSecond string `json:"requestsPerSecond,omitempty"`
+	P99LatencyMs      string `json:"p99LatencyMs,omitempty"`
+	NodeCount         int    `json:"nodeCount,omitempty"`
+	FetchedAt         string `json:"fetchedAt"`
+}
+
+// PodMetricsResponse is returned by GET /api/pods/:ns/:name/metrics
+type PodMetricsResponse struct {
+	Namespace       string `json:"namespace"`
+	PodName         string `json:"podName"`
+	CpuUsageCores   string `json:"cpuUsageCores"`
+	MemoryUsageBytes string `json:"memoryUsageBytes"`
+	FetchedAt       string `json:"fetchedAt"`
 }
 
 type PromQueryResult struct {
@@ -175,10 +199,6 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 
 		namespace := r.URL.Query().Get("namespace")
-		if namespace != "" && !portfolioNamespaces[namespace] {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Unknown or disallowed namespace"})
-			return
-		}
 
 		events, err := fetchEvents(r.Context(), clientset, namespace, 30)
 		if err != nil {
@@ -202,12 +222,8 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 
 		namespace := r.URL.Query().Get("namespace")
-		if namespace != "" && !portfolioNamespaces[namespace] {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Unknown or disallowed namespace"})
-			return
-		}
 
-		metrics, err := fetchPrometheusMetrics(r.Context(), namespace)
+		metrics, err := fetchPrometheusMetrics(r.Context(), clientset, namespace)
 		if err != nil {
 			log.Printf("[proxy] Error fetching metrics: %v", err)
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "Failed to fetch metrics"})
@@ -216,7 +232,7 @@ func main() {
 		writeJSON(w, http.StatusOK, metrics)
 	})
 
-	mux.HandleFunc("/api/pods/", handlePodDetail(clientset))
+	mux.HandleFunc("/api/pods/", handlePodOrMetrics(clientset))
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "ok")
@@ -235,7 +251,10 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func handlePodDetail(clientset *kubernetes.Clientset) http.HandlerFunc {
+// handlePodOrMetrics dispatches:
+//   /api/pods/{namespace}/{name}         → pod detail + events
+//   /api/pods/{namespace}/{name}/metrics → cAdvisor live CPU/mem for that pod
+func handlePodOrMetrics(clientset *kubernetes.Clientset) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !allowMethod(w, r, http.MethodGet) {
 			return
@@ -244,16 +263,31 @@ func handlePodDetail(clientset *kubernetes.Clientset) http.HandlerFunc {
 		setSecurityHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
 
-		// Path: /api/pods/{namespace}/{name}
+		// Strip prefix and parse segments
 		path := strings.TrimPrefix(r.URL.Path, "/api/pods/")
-		parts := strings.Split(path, "/")
+		parts := strings.Split(strings.TrimSuffix(path, "/"), "/")
+
+		// /api/pods/{ns}/{name}/metrics
+		if len(parts) == 3 && parts[2] == "metrics" {
+			ns, name := parts[0], parts[1]
+			podMetrics, err := fetchPodCAdvisorMetrics(r.Context(), ns, name)
+			if err != nil {
+				log.Printf("[proxy] Error fetching cAdvisor metrics for %s/%s: %v", ns, name, err)
+				writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "Failed to fetch pod metrics"})
+				return
+			}
+			writeJSON(w, http.StatusOK, podMetrics)
+			return
+		}
+
+		// /api/pods/{ns}/{name}
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Expected path /api/pods/{namespace}/{name}"})
 			return
 		}
 
 		namespace, name := parts[0], parts[1]
-		if len(namespace) > 63 || len(name) > 253 || !portfolioNamespaces[namespace] {
+		if len(namespace) > 63 || len(name) > 253 {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "Pod not found"})
 			return
 		}
@@ -307,18 +341,42 @@ func fetchTopology(ctx context.Context, clientset *kubernetes.Clientset) (*Topol
 			}
 		}
 
+		var roles []string
+		for label := range node.Labels {
+			if strings.HasPrefix(label, "node-role.kubernetes.io/") {
+				roles = append(roles, strings.TrimPrefix(label, "node-role.kubernetes.io/"))
+			}
+		}
+		if len(roles) == 0 {
+			roles = []string{"worker"}
+		}
+
+		memCap := node.Status.Capacity.Memory()
+		memAlloc := node.Status.Allocatable.Memory()
+
+		res := &NodeResources{
+			CPUCapacity:       node.Status.Capacity.Cpu().String(),
+			MemoryCapacity:    fmt.Sprintf("%d MB", memCap.Value()/(1024*1024)),
+			CPUAllocatable:    node.Status.Allocatable.Cpu().String(),
+			MemoryAllocatable: fmt.Sprintf("%d MB", memAlloc.Value()/(1024*1024)),
+			MaxPods:           node.Status.Capacity.Pods().String(),
+		}
+
 		nodes = append(nodes, NodeInfo{
-			Name:     node.Name,
-			Status:   status,
-			PodCount: podCountByNode[node.Name],
+			Name:             node.Name,
+			Status:           status,
+			PodCount:         podCountByNode[node.Name],
+			Roles:            roles,
+			KubeletVersion:   node.Status.NodeInfo.KubeletVersion,
+			OSImage:          node.Status.NodeInfo.OSImage,
+			Architecture:     node.Status.NodeInfo.Architecture,
+			ContainerRuntime: node.Status.NodeInfo.ContainerRuntimeVersion,
+			Resources:        res,
 		})
 	}
 
 	pods := make([]PodInfo, 0)
 	for _, pod := range podList.Items {
-		if !portfolioNamespaces[pod.Namespace] {
-			continue
-		}
 		pods = append(pods, transformPod(&pod, false))
 	}
 
@@ -369,18 +427,16 @@ func fetchEvents(ctx context.Context, clientset *kubernetes.Clientset, namespace
 		}
 		allEvents = eventList.Items
 	} else {
-		for ns := range portfolioNamespaces {
-			eventList, err := clientset.CoreV1().Events(ns).List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return nil, err
-			}
-			allEvents = append(allEvents, eventList.Items...)
+		eventList, err := clientset.CoreV1().Events(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, err
 		}
+		allEvents = eventList.Items
 	}
 
 	filtered := make([]corev1.Event, 0, len(allEvents))
 	for _, event := range allEvents {
-		if event.InvolvedObject.Kind == "Pod" && portfolioNamespaces[event.Namespace] {
+		if event.InvolvedObject.Kind == "Pod" {
 			filtered = append(filtered, event)
 		}
 	}
@@ -423,8 +479,35 @@ func queryPrometheus(ctx context.Context, query string) (string, error) {
 	return val, nil
 }
 
-func fetchPrometheusMetrics(ctx context.Context, namespace string) (*MetricsResponse, error) {
+// fetchPodCAdvisorMetrics queries Prometheus for live cAdvisor CPU/memory for a single pod.
+func fetchPodCAdvisorMetrics(ctx context.Context, namespace, podName string) (*PodMetricsResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// cAdvisor metrics use pod label (not pod_name), container!="" excludes pause containers
+	cpuQuery := fmt.Sprintf(
+		`sum(rate(container_cpu_usage_seconds_total{namespace="%s",pod="%s",container!=""}[2m]))`,
+		namespace, podName,
+	)
+	memQuery := fmt.Sprintf(
+		`sum(container_memory_working_set_bytes{namespace="%s",pod="%s",container!=""})`,
+		namespace, podName,
+	)
+
+	cpu, _ := queryPrometheus(ctx, cpuQuery)
+	mem, _ := queryPrometheus(ctx, memQuery)
+
+	return &PodMetricsResponse{
+		Namespace:        namespace,
+		PodName:          podName,
+		CpuUsageCores:    cpu,
+		MemoryUsageBytes: mem,
+		FetchedAt:        time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func fetchPrometheusMetrics(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*MetricsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
 	nsFilter := ""
@@ -435,32 +518,115 @@ func fetchPrometheusMetrics(ctx context.Context, namespace string) (*MetricsResp
 	podsQuery := fmt.Sprintf(`sum(kube_pod_status_phase{phase="Running"%s})`, nsFilter)
 	cpuQuery := fmt.Sprintf(`sum(kube_pod_container_resource_requests{resource="cpu"%s})`, nsFilter)
 	memQuery := fmt.Sprintf(`sum(kube_pod_container_resource_requests{resource="memory"%s})`, nsFilter)
+	cpuLimQuery := fmt.Sprintf(`sum(kube_pod_container_resource_limits{resource="cpu"%s})`, nsFilter)
+	memLimQuery := fmt.Sprintf(`sum(kube_pod_container_resource_limits{resource="memory"%s})`, nsFilter)
+
+	// cAdvisor actual usage (aggregated across portfolio namespaces)
+	var cpuUsageQuery, memUsageQuery string
+	if namespace != "" {
+		cpuUsageQuery = fmt.Sprintf(
+			`sum(rate(container_cpu_usage_seconds_total{namespace="%s",container!=""}[2m]))`,
+			namespace,
+		)
+		memUsageQuery = fmt.Sprintf(
+			`sum(container_memory_working_set_bytes{namespace="%s",container!=""})`,
+			namespace,
+		)
+	} else {
+		// Global queries across all namespaces
+		cpuUsageQuery = `sum(rate(container_cpu_usage_seconds_total{container!=""}[2m]))`
+		memUsageQuery = `sum(container_memory_working_set_bytes{container!=""})`
+	}
+
+	// Traefik request rate (safe to fail — no scrape job yet returns 0)
+	traefikRpsQuery := `sum(rate(traefik_service_requests_total[1m]))`
+	traefikP99Query := `histogram_quantile(0.99, sum(rate(traefik_service_request_duration_seconds_bucket[1m])) by (le)) * 1000`
 
 	pods, err := queryPrometheus(ctx, podsQuery)
-	if err != nil {
-		log.Printf("[proxy] failed to query pods: %v", err)
-		pods = "0"
-	}
-	
-	cpu, err := queryPrometheus(ctx, cpuQuery)
-	if err != nil {
-		log.Printf("[proxy] failed to query cpu: %v", err)
-		cpu = "0"
+	if err != nil || pods == "0" {
+		// Fallback to direct Kubernetes API calculation
+		podList, listErr := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		if listErr == nil {
+			var runningCount int
+			cpuReq := resource.NewQuantity(0, resource.DecimalSI)
+			memReq := resource.NewQuantity(0, resource.BinarySI)
+			cpuLim := resource.NewQuantity(0, resource.DecimalSI)
+			memLim := resource.NewQuantity(0, resource.BinarySI)
+
+			for _, pod := range podList.Items {
+				if pod.Status.Phase == corev1.PodRunning {
+					runningCount++
+				}
+				for _, c := range pod.Spec.Containers {
+					if q, ok := c.Resources.Requests[corev1.ResourceCPU]; ok {
+						cpuReq.Add(q)
+					}
+					if q, ok := c.Resources.Requests[corev1.ResourceMemory]; ok {
+						memReq.Add(q)
+					}
+					if q, ok := c.Resources.Limits[corev1.ResourceCPU]; ok {
+						cpuLim.Add(q)
+					}
+					if q, ok := c.Resources.Limits[corev1.ResourceMemory]; ok {
+						memLim.Add(q)
+					}
+				}
+			}
+
+			nodeList, _ := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+
+			// Still try cAdvisor + Traefik even in K8s-API fallback path
+			cpuUsage, _ := queryPrometheus(ctx, cpuUsageQuery)
+			memUsage, _ := queryPrometheus(ctx, memUsageQuery)
+			rps, _ := queryPrometheus(ctx, traefikRpsQuery)
+			p99, _ := queryPrometheus(ctx, traefikP99Query)
+
+			return &MetricsResponse{
+				Namespace:           namespace,
+				TotalPods:           fmt.Sprintf("%d", runningCount),
+				RunningPods:         fmt.Sprintf("%d", runningCount),
+				TotalCpuRequests:    fmt.Sprintf("%f", float64(cpuReq.MilliValue())/1000.0),
+				TotalMemoryRequests: fmt.Sprintf("%d", memReq.Value()),
+				TotalCpuLimits:      fmt.Sprintf("%f", float64(cpuLim.MilliValue())/1000.0),
+				TotalMemoryLimits:   fmt.Sprintf("%d", memLim.Value()),
+				TotalCpuUsage:       cpuUsage,
+				TotalMemoryUsage:    memUsage,
+				RequestsPerSecond:   rps,
+				P99LatencyMs:        p99,
+				NodeCount:           len(nodeList.Items),
+				FetchedAt:           time.Now().UTC().Format(time.RFC3339),
+			}, nil
+		}
 	}
 
-	mem, err := queryPrometheus(ctx, memQuery)
-	if err != nil {
-		log.Printf("[proxy] failed to query memory: %v", err)
-		mem = "0"
-	}
+	cpu, _ := queryPrometheus(ctx, cpuQuery)
+	mem, _ := queryPrometheus(ctx, memQuery)
+	cpuLim, _ := queryPrometheus(ctx, cpuLimQuery)
+	memLim, _ := queryPrometheus(ctx, memLimQuery)
+	cpuUsage, _ := queryPrometheus(ctx, cpuUsageQuery)
+	memUsage, _ := queryPrometheus(ctx, memUsageQuery)
+	rps, _ := queryPrometheus(ctx, traefikRpsQuery)
+	p99, _ := queryPrometheus(ctx, traefikP99Query)
+
+	nodeList, _ := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 
 	return &MetricsResponse{
+		Namespace:           namespace,
 		TotalPods:           pods,
+		RunningPods:         pods,
 		TotalCpuRequests:    cpu,
 		TotalMemoryRequests: mem,
+		TotalCpuLimits:      cpuLim,
+		TotalMemoryLimits:   memLim,
+		TotalCpuUsage:       cpuUsage,
+		TotalMemoryUsage:    memUsage,
+		RequestsPerSecond:   rps,
+		P99LatencyMs:        p99,
+		NodeCount:           len(nodeList.Items),
 		FetchedAt:           time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
+
 
 // ── Transform helpers ─────────────────────────────────────────────────────────
 

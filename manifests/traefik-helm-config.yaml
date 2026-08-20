@@ -1,5 +1,6 @@
 # Mounted into k3s at cluster creation (see k3d-config.yaml volumes).
 # Allows IngressRoute in `default` to route to Services in other namespaces.
+# Also enables Prometheus metrics on port 9100 so Prometheus can scrape request rates.
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig
 metadata:
@@ -10,3 +11,13 @@ spec:
     providers:
       kubernetesCRD:
         allowCrossNamespace: true
+    metrics:
+      prometheus:
+        entryPoint: metrics
+    ports:
+      metrics:
+        port: 9100
+        expose:
+          default: true
+        exposedPort: 9100
+        protocol: TCP

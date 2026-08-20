@@ -1,4 +1,4 @@
-import { Activity, Cpu, Database, Box } from 'lucide-react';
+import { Activity, Cpu, Database, Box, Zap } from 'lucide-react';
 import { useMetrics } from '../hooks/useMetrics';
 
 function formatCpu(cpuStr: string): string {
@@ -20,6 +20,13 @@ function formatMemory(memStr: string): string {
   return `${Math.round(mb)} MB`;
 }
 
+/** Returns true if the value is a real non-zero reading */
+function hasValue(v: string | undefined): boolean {
+  if (!v) return false;
+  const n = parseFloat(v);
+  return !isNaN(n) && n > 0;
+}
+
 export default function LiveMetrics() {
   const { metrics, loading, error } = useMetrics(5000);
 
@@ -31,6 +38,19 @@ export default function LiveMetrics() {
       </div>
     );
   }
+
+  // Prefer actual cAdvisor usage over resource requests when available
+  const showUsageCpu = hasValue(metrics?.totalCpuUsage);
+  const showUsageMem = hasValue(metrics?.totalMemoryUsage);
+
+  const cpuLabel = showUsageCpu ? 'CPU Usage' : 'CPU Requests';
+  const memLabel = showUsageMem ? 'Mem Usage' : 'Mem Requests';
+  const cpuValue = showUsageCpu
+    ? formatCpu(metrics?.totalCpuUsage ?? '0')
+    : formatCpu(metrics?.totalCpuRequests ?? '0');
+  const memValue = showUsageMem
+    ? formatMemory(metrics?.totalMemoryUsage ?? '0')
+    : formatMemory(metrics?.totalMemoryRequests ?? '0');
 
   return (
     <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -59,9 +79,12 @@ export default function LiveMetrics() {
           <Cpu size={20} />
         </div>
         <div>
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">CPU Requests</p>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+            {cpuLabel}
+            {showUsageCpu && <Zap size={10} className="text-yellow-500" />}
+          </p>
           <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-            {loading && !metrics ? '...' : formatCpu(metrics?.totalCpuRequests || '0')}
+            {loading && !metrics ? '...' : cpuValue}
           </h3>
         </div>
       </div>
@@ -72,9 +95,12 @@ export default function LiveMetrics() {
           <Database size={20} />
         </div>
         <div>
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Memory Requests</p>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+            {memLabel}
+            {showUsageMem && <Zap size={10} className="text-yellow-500" />}
+          </p>
           <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-            {loading && !metrics ? '...' : formatMemory(metrics?.totalMemoryRequests || '0')}
+            {loading && !metrics ? '...' : memValue}
           </h3>
         </div>
       </div>

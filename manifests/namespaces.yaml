@@ -77,3 +77,13 @@ metadata:
   name: frontend
   labels:
     app.kubernetes.io/part-of: portfolio
+
+---
+# The monitoring namespace hosts Prometheus and kube-state-metrics.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/part-of: portfolio
+

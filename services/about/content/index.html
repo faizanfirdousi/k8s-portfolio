@@ -627,54 +627,75 @@
     });
 
     (function () {
-      const panel = document.querySelector('.metrics-panel[data-namespace]');
+      var panel = document.querySelector('.metrics-panel[data-namespace]');
       if (!panel) return;
+      var ns = panel.getAttribute('data-namespace');
 
-      const updateMetrics = async () => {
-        try {
-          const response = await fetch('/api/topology');
-          if (!response.ok) return;
-          const topology = await response.json();
-          const pod = topology.pods?.find((item) => item.namespace === panel.dataset.namespace);
-          if (!pod) return;
+      function updateTopology() {
+        fetch('/api/topology', { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data || !data.pods) return;
+            var pod = data.pods.find(function(p) { return p.namespace === ns; });
+            if (!pod) return;
 
-          panel.querySelector('[data-live="pod-name"]').textContent = pod.name;
-          const status = panel.querySelector('[data-live="pod-status"]');
-          status.textContent = pod.status;
-          status.className = `value ${pod.status === 'Running' ? 'accent' : ''}`;
-
-          panel.querySelectorAll('.metric-slot').forEach((slot) => {
-            const label = slot.querySelector('.metric-slot__label')?.textContent.trim().toLowerCase();
-            const value = slot.querySelector('.metric-slot__value');
-            if (!value) return;
-            if (label === 'restarts') value.textContent = pod.restarts;
-            if (label === 'uptime') value.textContent = pod.age || '—';
-          });
-        } catch (_) {}
-
-        try {
-          const res = await fetch('/api/metrics?namespace=' + panel.dataset.namespace);
-          if (!res.ok) return;
-          const data = await res.json();
-          panel.querySelectorAll('.metric-slot').forEach((slot) => {
-            const label = slot.querySelector('.metric-slot__label')?.textContent.trim().toLowerCase();
-            const value = slot.querySelector('.metric-slot__value');
-            if (!value) return;
-            if (label === 'cpu') {
-              const cpuVal = parseFloat(data.totalCpuRequests);
-              value.textContent = !isNaN(cpuVal) ? (cpuVal < 1 ? Math.round(cpuVal * 1000) + 'm' : cpuVal.toFixed(2)) : '0m';
+            var nameEl = panel.querySelector('[data-live="pod-name"]');
+            var statusEl = panel.querySelector('[data-live="pod-status"]');
+            if (nameEl) nameEl.textContent = pod.name;
+            if (statusEl) {
+              statusEl.textContent = pod.status;
+              statusEl.className = 'value ' + (pod.status === 'Running' ? 'accent' : '');
             }
-            if (label === 'memory') {
-              const memVal = parseFloat(data.totalMemoryRequests) / (1024 * 1024);
-              value.textContent = !isNaN(memVal) ? Math.round(memVal) + ' MB' : '0 MB';
-            }
-          });
-        } catch (_) {}
-      };
 
-      updateMetrics();
-      window.setInterval(updateMetrics, 10000);
+            panel.querySelectorAll('.metric-slot').forEach(function(slot) {
+              var label = slot.querySelector('.metric-slot__label');
+              var value = slot.querySelector('.metric-slot__value');
+              if (!label || !value) return;
+              var key = label.textContent.trim().toLowerCase();
+              if (key === 'restarts') {
+                value.textContent = pod.restarts;
+                value.style.color = pod.restarts > 0 ? '#f97316' : '';
+              } else if (key === 'uptime') {
+                value.textContent = pod.age || '—';
+              }
+            });
+          })
+          .catch(function() {});
+      }
+
+      function updatePrometheusMetrics() {
+        fetch('/api/metrics?namespace=' + ns, { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data) return;
+            panel.querySelectorAll('.metric-slot').forEach(function(slot) {
+              var label = slot.querySelector('.metric-slot__label');
+              var value = slot.querySelector('.metric-slot__value');
+              if (!label || !value) return;
+              var key = label.textContent.trim().toLowerCase();
+              if (key === 'cpu') {
+                var cpuVal = parseFloat(data.totalCpuRequests);
+                value.textContent = !isNaN(cpuVal)
+                  ? (cpuVal < 1 ? Math.round(cpuVal * 1000) + 'm' : cpuVal.toFixed(2))
+                  : '0m';
+              } else if (key === 'memory') {
+                var memVal = parseFloat(data.totalMemoryRequests) / (1024 * 1024);
+                value.textContent = !isNaN(memVal) ? Math.round(memVal) + ' MB' : '0 MB';
+              }
+            });
+          })
+          .catch(function() {});
+      }
+
+      function update() {
+        updateTopology();
+        updatePrometheusMetrics();
+      }
+
+      update();
+      setInterval(update, 10000);
     })();
   </script>
+
 </body>
 </html>

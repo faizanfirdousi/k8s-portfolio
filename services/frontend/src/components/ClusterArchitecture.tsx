@@ -1,11 +1,12 @@
-import type { TopologyPod } from '../hooks/useTopology';
+import type { TopologyPod, TopologyNode } from '../hooks/useTopology';
 import type { PodRef } from '../types/topology';
 import { ROUTE_BY_NAMESPACE } from '../config/portfolioRoutes';
 import { cn } from '@/lib/utils';
-import { Server, Cpu, HardDrive, ArrowDown, ShieldCheck, Globe } from 'lucide-react';
+import { Server, HardDrive, ArrowDown, ShieldCheck, Cpu, Globe } from 'lucide-react';
 
 interface ClusterArchitectureProps {
   pods: TopologyPod[];
+  nodes: TopologyNode[];
   onPodClick: (ref: PodRef) => void;
 }
 
@@ -39,14 +40,28 @@ function PodItem({ pod, fallbackNs, onPodClick }: PodItemProps) {
             className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold"
             style={{ border: `1px solid ${color}`, color }}
           >
-            {route ? (route.id === 'home' ? '⌂' : route.id === 'about' ? '◈' : route.id === 'projects' ? '◧' : route.id === 'skills' ? '◇' : route.id === 'blog' ? '◎' : '◉') : '●'}
+            {route
+              ? route.id === 'home'
+                ? '⌂'
+                : route.id === 'about'
+                ? '◈'
+                : route.id === 'projects'
+                ? '◧'
+                : route.id === 'skills'
+                ? '◇'
+                : route.id === 'blog'
+                ? '◎'
+                : '◉'
+              : '●'}
           </span>
           <span className="mono text-[11px] font-bold text-zinc-900 dark:text-zinc-100">{ns}</span>
         </div>
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-            isRunning ? 'border border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-400' : 'border border-amber-700 text-amber-800 dark:border-amber-500 dark:text-amber-400',
+            isRunning
+              ? 'border border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-400'
+              : 'border border-amber-700 text-amber-800 dark:border-amber-500 dark:text-amber-400',
           )}
         >
           <span className={cn('h-1.5 w-1.5 rounded-full', isRunning ? 'bg-emerald-500' : 'bg-amber-500')} />
@@ -55,56 +70,151 @@ function PodItem({ pod, fallbackNs, onPodClick }: PodItemProps) {
       </div>
 
       <div className="space-y-1">
-        <p className="mono truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200" title={pod?.name ?? `${ns}-pod`}>
+        <p
+          className="mono truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200"
+          title={pod?.name ?? `${ns}-pod`}
+        >
           {pod?.name ?? `${ns}-pod`}
         </p>
         <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
-          <span>Ready: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.ready ?? '1/1'}</strong></span>
-          <span>Restarts: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.restarts ?? 0}</strong></span>
-          <span>Age: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.age ?? 'live'}</strong></span>
+          <span>
+            Ready: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.ready ?? '1/1'}</strong>
+          </span>
+          <span>
+            Restarts: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.restarts ?? 0}</strong>
+          </span>
+          <span>
+            Age: <strong className="text-zinc-700 dark:text-zinc-300">{pod?.age ?? 'live'}</strong>
+          </span>
         </div>
       </div>
     </button>
   );
 }
 
-export default function ClusterArchitecture({ pods, onPodClick }: ClusterArchitectureProps) {
-  const podByNs = Object.fromEntries(pods.map((p) => [p.namespace, p]));
+interface WorkerNodePanelProps {
+  k8sNode: TopologyNode;
+  nodePods: TopologyPod[];
+  onPodClick: (ref: PodRef) => void;
+}
 
-  const node1AssignedNs = ['frontend', 'about', 'projects'];
-  const node2AssignedNs = ['skills', 'blog', 'contact', 'proxy'];
+/** One card per real K8s worker node */
+function WorkerNodePanel({ k8sNode, nodePods, onPodClick }: WorkerNodePanelProps) {
+  const isReady = k8sNode.status === 'Ready';
 
-  const node1Pods: { ns: string; pod?: TopologyPod }[] = [];
-  const node2Pods: { ns: string; pod?: TopologyPod }[] = [];
+  return (
+    <div className="flex flex-col rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+      <div className="mb-4 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-700">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-900 text-zinc-900 dark:border-zinc-300 dark:text-white">
+            <HardDrive size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                {k8sNode.roles?.includes('control-plane') || k8sNode.roles?.includes('master')
+                  ? 'Control + Worker'
+                  : 'Worker Node'}
+              </h4>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                  isReady
+                    ? 'border border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-300'
+                    : 'border border-amber-700 text-amber-800 dark:border-amber-500 dark:text-amber-300',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    isReady ? 'bg-emerald-500' : 'bg-amber-500',
+                  )}
+                />
+                {k8sNode.status}
+              </span>
+            </div>
+            <p className="mono text-[11px] text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[220px]">
+              {k8sNode.name}
+            </p>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <span className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
+            {nodePods.length} Pods
+          </span>
+        </div>
+      </div>
 
-  if (pods.length > 0) {
-    for (const pod of pods) {
-      if (pod.node) {
-        if (pod.node.includes('agent-1') || pod.node.includes('node-2')) {
-          node2Pods.push({ ns: pod.namespace, pod });
-        } else {
-          node1Pods.push({ ns: pod.namespace, pod });
-        }
-      } else {
-        if (node1AssignedNs.includes(pod.namespace)) {
-          node1Pods.push({ ns: pod.namespace, pod });
-        } else {
-          node2Pods.push({ ns: pod.namespace, pod });
-        }
-      }
-    }
-  } else {
-    for (const ns of node1AssignedNs) {
-      node1Pods.push({ ns, pod: podByNs[ns] });
-    }
-    for (const ns of node2AssignedNs) {
-      node2Pods.push({ ns, pod: podByNs[ns] });
+      {k8sNode.resources && (
+        <div className="mb-3 flex flex-wrap gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono dark:bg-zinc-800">
+            CPU {k8sNode.resources.cpuAllocatable ?? k8sNode.resources.cpuCapacity ?? '?'}
+          </span>
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono dark:bg-zinc-800">
+            Mem {k8sNode.resources.memoryAllocatable ?? k8sNode.resources.memoryCapacity ?? '?'}
+          </span>
+          {k8sNode.kubeletVersion && (
+            <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono dark:bg-zinc-800">
+              {k8sNode.kubeletVersion}
+            </span>
+          )}
+        </div>
+      )}
+
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+        // Pods Running Inside Node
+      </p>
+      <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {nodePods.length > 0 ? (
+          nodePods.map((pod) => (
+            <PodItem key={pod.name} fallbackNs={pod.namespace} pod={pod} onPodClick={onPodClick} />
+          ))
+        ) : (
+          <p className="col-span-2 text-center text-xs text-zinc-400 py-4">No portfolio pods on this node</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ClusterArchitecture({ pods, nodes, onPodClick }: ClusterArchitectureProps) {
+  // Group pods by their actual node name
+  const podsByNode = new Map<string, TopologyPod[]>();
+  const unassigned: TopologyPod[] = [];
+
+  for (const pod of pods) {
+    if (pod.node) {
+      const list = podsByNode.get(pod.node) ?? [];
+      list.push(pod);
+      podsByNode.set(pod.node, list);
+    } else {
+      unassigned.push(pod);
     }
   }
 
+  // Use real nodes from topology; fall back to a single placeholder if no data yet
+  const displayNodes: TopologyNode[] =
+    nodes.length > 0
+      ? nodes
+      : [
+          {
+            name: 'Loading…',
+            status: 'Ready',
+            podCount: 0,
+            roles: ['worker'],
+          },
+        ];
+
+  // Detect which node is purely control-plane with no portfolio pods
+  // (For k3d, server-0 hosts system pods but not portfolio ones)
+  const nodesWithPods = displayNodes.filter(
+    (n) => (podsByNode.get(n.name) ?? []).length > 0 || displayNodes.length === 1,
+  );
+  const renderNodes = nodesWithPods.length > 0 ? nodesWithPods : displayNodes;
+
   return (
     <div className="space-y-6">
-      {/* ── TOP TIER: KUBERNETES CONTROL PLANE ─────────────────────────────── */}
+      {/* ── CONTROL PLANE ─────────────────────────────────────────────────── */}
       <div className="relative rounded-2xl border border-zinc-300 bg-white p-5 text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-white">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -114,15 +224,15 @@ export default function ClusterArchitecture({ pods, onPodClick }: ClusterArchite
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">
-                  Control Plane (Master Node)
+                  Kubernetes Control Plane
                 </h3>
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-500 dark:text-emerald-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Ready · v1.29.2+k3s1
+                  Ready
                 </span>
               </div>
               <p className="mono text-xs text-zinc-600 dark:text-zinc-300 font-medium">
-                k3d-portfolio-server-0 · 172.20.0.2
+                API Server · etcd · Scheduler · Controller Manager
               </p>
             </div>
           </div>
@@ -138,13 +248,13 @@ export default function ClusterArchitecture({ pods, onPodClick }: ClusterArchite
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 py-1 font-mono text-[11px] font-medium text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
               <Globe size={13} />
-              Traefik Ingress :8080
+              Traefik Ingress :80
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── CONNECTOR FLOW ─────────────────────────────────────────────────── */}
+      {/* ── FLOW CONNECTOR ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-1 font-mono text-[11px] font-semibold text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
           <ArrowDown size={13} className="animate-bounce" />
@@ -153,75 +263,21 @@ export default function ClusterArchitecture({ pods, onPodClick }: ClusterArchite
         </div>
       </div>
 
-      {/* ── BOTTOM TIER: TWO WORKER NODES ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* WORKER NODE 1 */}
-        <div className="flex flex-col rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
-          <div className="mb-4 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-700">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-900 text-zinc-900 dark:border-zinc-300 dark:text-white">
-                <HardDrive size={18} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Worker Node 1</h4>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-500 dark:text-emerald-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Ready
-                  </span>
-                </div>
-                <p className="mono text-[11px] text-zinc-600 dark:text-zinc-300 font-medium">k3d-portfolio-agent-0</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-                {node1Pods.length} Pods Hosted
-              </span>
-            </div>
-          </div>
-
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-            // Pods Running Inside Node 1
-          </p>
-          <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {node1Pods.map(({ ns, pod }) => (
-              <PodItem key={ns} fallbackNs={ns} pod={pod} onPodClick={onPodClick} />
-            ))}
-          </div>
-        </div>
-
-        {/* WORKER NODE 2 */}
-        <div className="flex flex-col rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
-          <div className="mb-4 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-700">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-900 text-zinc-900 dark:border-zinc-300 dark:text-white">
-                <HardDrive size={18} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Worker Node 2</h4>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-500 dark:text-emerald-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Ready
-                  </span>
-                </div>
-                <p className="mono text-[11px] text-zinc-600 dark:text-zinc-300 font-medium">k3d-portfolio-agent-1</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-                {node2Pods.length} Pods Hosted
-              </span>
-            </div>
-          </div>
-
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-            // Pods Running Inside Node 2
-          </p>
-          <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {node2Pods.map(({ ns, pod }) => (
-              <PodItem key={ns} fallbackNs={ns} pod={pod} onPodClick={onPodClick} />
-            ))}
-          </div>
-        </div>
+      {/* ── WORKER NODES (dynamic grid) ─────────────────────────────────────── */}
+      <div
+        className={cn(
+          'grid gap-6',
+          renderNodes.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2',
+        )}
+      >
+        {renderNodes.map((node) => (
+          <WorkerNodePanel
+            key={node.name}
+            k8sNode={node}
+            nodePods={podsByNode.get(node.name) ?? []}
+            onPodClick={onPodClick}
+          />
+        ))}
       </div>
     </div>
   );

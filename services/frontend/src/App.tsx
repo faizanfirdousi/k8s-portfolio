@@ -54,6 +54,7 @@ function App() {
         />
         <MainContent
           pods={data?.pods ?? []}
+          nodes={data?.nodes ?? []}
           clusterHealthy={!error && !!data}
           onPodClick={setSelectedPod}
           view={view}

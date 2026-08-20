@@ -117,9 +117,14 @@ for DIR in about projects skills blog contact proxy frontend; do
   kubectl apply -f "$ROOT_DIR/manifests/$DIR/"
 done
 
+# Then: apply monitoring stack (Prometheus & kube-state-metrics)
+echo "    Applying Monitoring stack..."
+kubectl apply -f "$ROOT_DIR/manifests/monitoring/"
+
 # Then: apply network policies for least-privilege traffic isolation
 echo "    Applying NetworkPolicies..."
 kubectl apply -f "$ROOT_DIR/manifests/network-policies/"
+
 
 # Then: the IngressRoute (routes traffic to services that now exist)
 kubectl apply -f "$ROOT_DIR/manifests/ingress.yaml"

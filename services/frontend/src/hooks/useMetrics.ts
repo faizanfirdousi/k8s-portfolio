@@ -4,6 +4,15 @@ export interface MetricsResponse {
   totalPods: string;
   totalCpuRequests: string;
   totalMemoryRequests: string;
+  totalCpuLimits?: string;
+  totalMemoryLimits?: string;
+  // cAdvisor actual usage — present when Prometheus cAdvisor scrape is active
+  totalCpuUsage?: string;
+  totalMemoryUsage?: string;
+  // Traefik — present when Traefik scrape job is wired
+  requestsPerSecond?: string;
+  p99LatencyMs?: string;
+  nodeCount?: number;
   fetchedAt: string;
 }
 

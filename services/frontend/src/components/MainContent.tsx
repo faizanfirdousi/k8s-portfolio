@@ -6,7 +6,7 @@ import NodeInfoPanel from './NodeInfoPanel';
 import ClusterScene3D from './ClusterScene3D';
 import LiveMetrics from './LiveMetrics';
 import type { PortfolioRoute } from '../config/portfolioRoutes';
-import type { TopologyPod } from '../hooks/useTopology';
+import type { TopologyPod, TopologyNode } from '../hooks/useTopology';
 import type { PodRef } from '../types/topology';
 import type { PageMetrics } from '../hooks/usePageMetrics';
 
@@ -14,6 +14,7 @@ type View = 'cluster' | 'table';
 
 interface MainContentProps {
   pods: TopologyPod[];
+  nodes: TopologyNode[];
   clusterHealthy: boolean;
   onPodClick: (ref: PodRef) => void;
   view: View;
@@ -28,7 +29,7 @@ const formatMilliseconds = (value: number | null) => {
   return value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${value}ms`;
 };
 
-export default function MainContent({ pods, clusterHealthy, onPodClick, view, onViewChange, darkMode, pageMetrics, topologyResponseMs }: MainContentProps) {
+export default function MainContent({ pods, nodes, clusterHealthy, onPodClick, view, onViewChange, darkMode, pageMetrics, topologyResponseMs }: MainContentProps) {
   const [selectedRoute, setSelectedRoute] = useState<PortfolioRoute | null>(null);
   const podByNs = Object.fromEntries(pods.map((p) => [p.namespace, p]));
 
@@ -84,10 +85,22 @@ export default function MainContent({ pods, clusterHealthy, onPodClick, view, on
       <div className="relative min-w-0 p-4 sm:p-6 lg:p-8">
         <LiveMetrics />
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Infrastructure map</p>
-            <h2 className="text-lg font-bold text-zinc-900">Live cluster topology</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-zinc-900">Live cluster topology</h2>
+              {nodes.length === 1 && (
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+                  Single Node K3s (AWS EC2)
+                </span>
+              )}
+            </div>
+            {nodes.length === 1 && (
+              <p className="mt-1 text-xs text-zinc-500 max-w-xl">
+                <strong>Transparency Note:</strong> This is an honest representation of the cluster. Unlike local k3d setups where nodes are simulated via containers, this runs natively on a single AWS EC2 instance where the Control Plane and Worker are the exact same machine.
+              </p>
+            )}
           </div>
           <div className="flex items-center justify-between gap-3 sm:justify-end">
             <span className="mono hidden rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] text-zinc-500 sm:block">click a node to inspect</span>
@@ -118,13 +131,14 @@ export default function MainContent({ pods, clusterHealthy, onPodClick, view, on
         {view === 'cluster' ? (
           <ClusterScene3D
             pods={pods}
+            nodes={nodes}
             clusterHealthy={clusterHealthy}
             onNodeSelect={setSelectedRoute}
             darkMode={darkMode}
           />
         ) : (
           <div className="overflow-x-auto rounded-2xl border-2 border-zinc-200 bg-white p-5 shadow-[4px_4px_0_0_#e2e8f0] transition-colors dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-[4px_4px_0_0_#18181b]">
-            <ClusterArchitecture pods={pods} onPodClick={onPodClick} />
+            <ClusterArchitecture pods={pods} nodes={nodes} onPodClick={onPodClick} />
           </div>
         )}
 

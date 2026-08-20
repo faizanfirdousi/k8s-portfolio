@@ -66,8 +66,25 @@ export const PORTFOLIO_ROUTES: PortfolioRoute[] = [
   },
 ];
 
-export const ROUTE_BY_NAMESPACE: Record<string, PortfolioRoute> = Object.fromEntries(
-  PORTFOLIO_ROUTES.map((r) => [r.namespace, r]),
+export const ROUTE_BY_NAMESPACE: Record<string, PortfolioRoute> = new Proxy(
+  Object.fromEntries(PORTFOLIO_ROUTES.map((r) => [r.namespace, r])),
+  {
+    get: (target, prop: string) => {
+      if (prop in target) {
+        return target[prop];
+      }
+      // Fallback for system namespaces
+      return {
+        id: prop,
+        namespace: prop,
+        route: `/${prop}`,
+        label: prop,
+        color: '#71717a', // zinc-500
+        href: '#',
+        description: `Kubernetes system or infrastructure namespace: ${prop}`,
+      };
+    },
+  },
 );
 
 export const ROUTE_BY_ID: Record<string, PortfolioRoute> = Object.fromEntries(
