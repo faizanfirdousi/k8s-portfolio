@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import ClusterArchitecture from './ClusterArchitecture';
 import NodeInfoPanel from './NodeInfoPanel';
 import ClusterScene3D from './ClusterScene3D';
+import LiveMetrics from './LiveMetrics';
 import type { PortfolioRoute } from '../config/portfolioRoutes';
 import type { TopologyPod } from '../hooks/useTopology';
 import type { PodRef } from '../types/topology';
@@ -81,6 +82,8 @@ export default function MainContent({ pods, clusterHealthy, onPodClick, view, on
       </section>
 
       <div className="relative min-w-0 p-4 sm:p-6 lg:p-8">
+        <LiveMetrics />
+
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Infrastructure map</p>

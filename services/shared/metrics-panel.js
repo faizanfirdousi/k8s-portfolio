@@ -257,7 +257,7 @@ function renderMetricsPanel(sectionKey, options = {}) {
       <div class="metrics-panel__title">// ${sectionKey} metrics</div>
       <div class="metrics-grid">${extraMetrics}</div>
 
-      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+      
     </aside>${metricsLiveScript()}`;
 }
 
@@ -298,7 +298,7 @@ function renderMetricsPanelHtml(sectionKey, podName) {
       <div class="metrics-grid">${svcMetrics}</div>
       <div class="metrics-panel__title">// ${sectionKey} metrics</div>
       <div class="metrics-grid">${extraMetrics}</div>
-      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+      
     </aside>${metricsLiveScript()}`;
 }
 
@@ -322,7 +322,6 @@ function metricsLiveScript() {
             var pod = data.pods.find(function(p) { return p.namespace === ns; });
             if (!pod) return;
 
-            // Pod info
             var nameEl = panel.querySelector('[data-live="pod-name"]');
             var statusEl = panel.querySelector('[data-live="pod-status"]');
             if (nameEl) nameEl.textContent = pod.name;
@@ -331,7 +330,6 @@ function metricsLiveScript() {
               statusEl.className = 'value ' + (pod.status === 'Running' ? 'accent' : '');
             }
 
-            // Pod metrics slots
             var slots = panel.querySelectorAll('.metric-slot');
             slots.forEach(function(slot) {
               var label = slot.querySelector('.metric-slot__label');
@@ -343,6 +341,35 @@ function metricsLiveScript() {
                 value.style.color = pod.restarts > 0 ? '#f97316' : '';
               } else if (key === 'uptime') {
                 value.textContent = pod.age || '—';
+              }
+            });
+          })
+          .catch(function() { /* silent */ });
+
+        fetch('/api/metrics?namespace=' + ns)
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data) return;
+            var slots = panel.querySelectorAll('.metric-slot');
+            slots.forEach(function(slot) {
+              var label = slot.querySelector('.metric-slot__label');
+              var value = slot.querySelector('.metric-slot__value');
+              if (!label || !value) return;
+              var key = label.textContent.trim().toLowerCase();
+              if (key === 'cpu') {
+                var cpuVal = parseFloat(data.totalCpuRequests);
+                if (!isNaN(cpuVal)) {
+                  value.textContent = cpuVal < 1 ? Math.round(cpuVal * 1000) + 'm' : cpuVal.toFixed(2);
+                } else {
+                  value.textContent = '0m';
+                }
+              } else if (key === 'memory') {
+                var memVal = parseFloat(data.totalMemoryRequests) / (1024 * 1024);
+                if (!isNaN(memVal)) {
+                  value.textContent = Math.round(memVal) + ' MB';
+                } else {
+                  value.textContent = '0 MB';
+                }
               }
             });
           })

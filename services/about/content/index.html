@@ -603,7 +603,7 @@
           <span class="metric-slot__hint">Nginx</span>
         </div>
       </div>
-      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+      
     </aside>
     </div><!-- /.page-layout -->
   </div>
@@ -650,7 +650,26 @@
             if (label === 'restarts') value.textContent = pod.restarts;
             if (label === 'uptime') value.textContent = pod.age || '—';
           });
-        } catch (_) { /* Keep the planned Prometheus fields as placeholders. */ }
+        } catch (_) {}
+
+        try {
+          const res = await fetch('/api/metrics?namespace=' + panel.dataset.namespace);
+          if (!res.ok) return;
+          const data = await res.json();
+          panel.querySelectorAll('.metric-slot').forEach((slot) => {
+            const label = slot.querySelector('.metric-slot__label')?.textContent.trim().toLowerCase();
+            const value = slot.querySelector('.metric-slot__value');
+            if (!value) return;
+            if (label === 'cpu') {
+              const cpuVal = parseFloat(data.totalCpuRequests);
+              value.textContent = !isNaN(cpuVal) ? (cpuVal < 1 ? Math.round(cpuVal * 1000) + 'm' : cpuVal.toFixed(2)) : '0m';
+            }
+            if (label === 'memory') {
+              const memVal = parseFloat(data.totalMemoryRequests) / (1024 * 1024);
+              value.textContent = !isNaN(memVal) ? Math.round(memVal) + ' MB' : '0 MB';
+            }
+          });
+        } catch (_) {}
       };
 
       updateMetrics();

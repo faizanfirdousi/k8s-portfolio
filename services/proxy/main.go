@@ -104,6 +104,23 @@ type EventsResponse struct {
 	FetchedAt string      `json:"fetchedAt"`
 }
 
+type MetricsResponse struct {
+	TotalPods           string `json:"totalPods"`
+	TotalCpuRequests    string `json:"totalCpuRequests"`
+	TotalMemoryRequests string `json:"totalMemoryRequests"`
+	FetchedAt           string `json:"fetchedAt"`
+}
+
+type PromQueryResult struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Value []interface{} `json:"value"` // [ timestamp, "value" ]
+		} `json:"result"`
+	} `json:"data"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
@@ -174,6 +191,29 @@ func main() {
 			Events:    events,
 			FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		})
+	})
+
+	mux.HandleFunc("/api/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !allowMethod(w, r, http.MethodGet) {
+			return
+		}
+		setCORS(w, r)
+		setSecurityHeaders(w)
+		w.Header().Set("Content-Type", "application/json")
+
+		namespace := r.URL.Query().Get("namespace")
+		if namespace != "" && !portfolioNamespaces[namespace] {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Unknown or disallowed namespace"})
+			return
+		}
+
+		metrics, err := fetchPrometheusMetrics(r.Context(), namespace)
+		if err != nil {
+			log.Printf("[proxy] Error fetching metrics: %v", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "Failed to fetch metrics"})
+			return
+		}
+		writeJSON(w, http.StatusOK, metrics)
 	})
 
 	mux.HandleFunc("/api/pods/", handlePodDetail(clientset))
@@ -346,6 +386,80 @@ func fetchEvents(ctx context.Context, clientset *kubernetes.Clientset, namespace
 	}
 
 	return transformEvents(filtered, limit), nil
+}
+
+func queryPrometheus(ctx context.Context, query string) (string, error) {
+	promURL := "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, promURL, nil)
+	if err != nil {
+		return "", err
+	}
+	q := req.URL.Query()
+	q.Add("query", query)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("prometheus returned status %d", resp.StatusCode)
+	}
+
+	var res PromQueryResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	if res.Status != "success" || len(res.Data.Result) == 0 || len(res.Data.Result[0].Value) < 2 {
+		return "0", nil
+	}
+
+	val, ok := res.Data.Result[0].Value[1].(string)
+	if !ok {
+		return "0", nil
+	}
+	return val, nil
+}
+
+func fetchPrometheusMetrics(ctx context.Context, namespace string) (*MetricsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	nsFilter := ""
+	if namespace != "" {
+		nsFilter = fmt.Sprintf(`,namespace="%s"`, namespace)
+	}
+
+	podsQuery := fmt.Sprintf(`sum(kube_pod_status_phase{phase="Running"%s})`, nsFilter)
+	cpuQuery := fmt.Sprintf(`sum(kube_pod_container_resource_requests{resource="cpu"%s})`, nsFilter)
+	memQuery := fmt.Sprintf(`sum(kube_pod_container_resource_requests{resource="memory"%s})`, nsFilter)
+
+	pods, err := queryPrometheus(ctx, podsQuery)
+	if err != nil {
+		log.Printf("[proxy] failed to query pods: %v", err)
+		pods = "0"
+	}
+	
+	cpu, err := queryPrometheus(ctx, cpuQuery)
+	if err != nil {
+		log.Printf("[proxy] failed to query cpu: %v", err)
+		cpu = "0"
+	}
+
+	mem, err := queryPrometheus(ctx, memQuery)
+	if err != nil {
+		log.Printf("[proxy] failed to query memory: %v", err)
+		mem = "0"
+	}
+
+	return &MetricsResponse{
+		TotalPods:           pods,
+		TotalCpuRequests:    cpu,
+		TotalMemoryRequests: mem,
+		FetchedAt:           time.Now().UTC().Format(time.RFC3339),
+	}, nil
 }
 
 // ── Transform helpers ─────────────────────────────────────────────────────────
