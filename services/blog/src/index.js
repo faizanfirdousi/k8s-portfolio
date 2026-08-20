@@ -218,6 +218,14 @@ function pageWrapper(title, content) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    (function() {
+      if (localStorage.getItem('portfolio-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Technical blog posts and articles by Faizan Firdousi on Cloud, Kubernetes, Go, and Systems." />
@@ -225,15 +233,40 @@ function pageWrapper(title, content) {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    .cluster-cta {
+      position: absolute;
+      top: 1.5rem;
+      right: 4.5rem;
+      left: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .cluster-cta:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     :root {
       --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
       --accent: #4f46e5; --accent2: #0891b2; --text: #0f172a;
-      --muted: #64748b; --green: #059669; --tag-bg: #f1f5f9;
+      --muted: #475569; --green: #047857; --tag-bg: #f1f5f9;
     }
     .dark {
-      --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
-      --accent: #6366f1; --accent2: #06b6d4; --text: #f1f5f9;
-      --muted: #94a3b8; --green: #10b981; --tag-bg: #1e293b;
+      --bg: #0f172a; --surface: #111827; --border: #334155;
+      --accent: #a5b4fc; --accent2: #67e8f9; --text: #f8fafc;
+      --muted: #cbd5e1; --green: #6ee7b7; --tag-bg: #1e293b;
     }
     .theme-toggle {
       position: absolute;
@@ -315,6 +348,11 @@ function pageWrapper(title, content) {
     const currentTheme = localStorage.getItem('portfolio-theme');
     if (currentTheme === 'dark') { document.documentElement.classList.add('dark'); }
   </script>
+  
+  <a href="/" class="cluster-cta" aria-label="View Live Cluster">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+    View Live Cluster
+  </a>
   <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
     <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
@@ -487,4 +525,3 @@ app.get(['/blog/:slug', '/:slug'], async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[blog] Server listening on port ${PORT}`);
 });
-

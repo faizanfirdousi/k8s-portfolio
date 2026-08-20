@@ -35,7 +35,7 @@ export default function Sidebar({ frontendPod, open, onClose, pods }: SidebarPro
           </div>
           <h2 className="text-lg font-bold text-zinc-900">Hi, I'm Faizan</h2>
           <p className="text-xs font-medium text-zinc-500">Cloud Engineer · Go Developer</p>
-          <p className="mt-1 text-[11px] text-teal-600 font-medium">Learning AI · I²IT Pune</p>
+          <p className="mt-1 text-[11px] text-teal-600 font-medium">Learning AI</p>
           <p className="mono mt-2 text-[10px] text-zinc-400">› kubectl get pods -A</p>
         </div>
 

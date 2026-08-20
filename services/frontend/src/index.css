@@ -16,13 +16,10 @@ html {
   scroll-behavior: smooth;
 }
 
-body {
-  @apply min-h-screen bg-zinc-50 font-sans text-zinc-900 antialiased;
-  background-image: radial-gradient(circle at 20% -10%, rgba(99, 102, 241, .10), transparent 32rem);
-}
+body { @apply min-h-screen bg-zinc-50 font-sans text-zinc-900 antialiased; }
 
 .app-shell { background: transparent; }
-.hero-surface { background: linear-gradient(120deg, rgba(255,255,255,.98), rgba(238,242,255,.82)); }
+.hero-surface { background: #fff; }
 
 /* Dark mode uses a small set of deliberate surface overrides so existing data-state
    colors (healthy, warning, namespaces) remain legible without duplicating every component. */
@@ -31,21 +28,20 @@ body {
   --reaviz-tick-fill: #a1a1aa;
   --reaviz-gridline-stroke: rgba(161, 161, 170, .22);
 }
-.dark body { background: #090d18; background-image: radial-gradient(circle at 20% -10%, rgba(99,102,241,.20), transparent 34rem); }
-.dark .app-shell { background: #090d18; }
-.dark .bg-white, .dark .bg-white\/90, .dark .bg-white\/95 { background-color: #12192a !important; }
-.dark .bg-zinc-50, .dark .bg-slate-100 { background-color: #0e1524 !important; }
-.dark .bg-zinc-100 { background-color: #1d2638 !important; }
-.dark .bg-zinc-900 { background-color: #080c15 !important; }
-.dark .hero-surface { background: linear-gradient(120deg, #12192a, #151b34) !important; }
-.dark .border-zinc-100, .dark .border-zinc-200, .dark .border-zinc-300 { border-color: #2a3549 !important; }
-.dark .border-zinc-900 { border-color: #465675 !important; }
-.dark .text-zinc-900 { color: #f4f7ff !important; }
-.dark .text-zinc-700 { color: #d2daea !important; }
-.dark .text-zinc-600, .dark .text-zinc-500 { color: #aebbd0 !important; }
-.dark .text-zinc-400 { color: #7f90aa !important; }
-.dark .hover\:bg-zinc-50:hover, .dark .hover\:bg-zinc-100:hover { background-color: #202b40 !important; }
-.dark .shadow-\[4px_4px_0_0_\#18181b\], .dark .shadow-\[6px_6px_0_0_\#18181b\] { box-shadow: 4px 4px 0 #05070c !important; }
+.dark body, .dark .app-shell { background: #0f172a; }
+.dark .bg-white, .dark .bg-white\/90, .dark .bg-white\/95 { background-color: #111827 !important; }
+.dark .bg-zinc-50, .dark .bg-slate-100 { background-color: #0f172a !important; }
+.dark .bg-zinc-100 { background-color: #1e293b !important; }
+.dark .bg-zinc-900 { background-color: #020617 !important; }
+.dark .hero-surface { background: #111827 !important; }
+.dark .border-zinc-100, .dark .border-zinc-200, .dark .border-zinc-300 { border-color: #334155 !important; }
+.dark .border-zinc-900 { border-color: #64748b !important; }
+.dark .text-zinc-900 { color: #f8fafc !important; }
+.dark .text-zinc-700 { color: #e2e8f0 !important; }
+.dark .text-zinc-600, .dark .text-zinc-500 { color: #cbd5e1 !important; }
+.dark .text-zinc-400 { color: #94a3b8 !important; }
+.dark .hover\:bg-zinc-50:hover, .dark .hover\:bg-zinc-100:hover { background-color: #1e293b !important; }
+.dark .shadow-\[4px_4px_0_0_\#18181b\], .dark .shadow-\[6px_6px_0_0_\#18181b\] { box-shadow: 4px 4px 0 #020617 !important; }
 
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid #818cf8; outline-offset: 3px; }
@@ -94,13 +90,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* Product surface: soften the generated utility-first layout into one visual system. */
 .app-shell {
-  --app-bg: #f7f8fc;
-  --app-surface: rgba(255,255,255,.88);
-  --app-surface-muted: #f1f3f9;
-  --app-border: #e5e7ef;
-  --app-text: #182033;
-  --app-muted: #65708a;
-  --app-accent: #635bff;
+  --app-bg: #f8fafc;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f1f5f9;
+  --app-border: #cbd5e1;
+  --app-text: #0f172a;
+  --app-muted: #475569;
+  --app-accent: #4338ca;
   background: var(--app-bg);
 }
 .app-shell > header { border-color: var(--app-border); box-shadow: 0 1px 0 rgba(15,23,42,.02); }
@@ -108,7 +104,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app-shell .hero-surface {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(115deg, #fff 0%, #f7f7ff 54%, #eef4ff 100%);
+  background: #fff;
 }
 .app-shell .hero-surface::after {
   content: '';
@@ -118,7 +114,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   right: -8rem;
   top: -13rem;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,91,255,.18), transparent 65%);
+  background: none;
   pointer-events: none;
 }
 .app-shell .hero-surface > * { position: relative; z-index: 1; }
@@ -145,34 +141,36 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app-shell .scene-canvas-wrapper { border-radius: 16px; }
 
 .dark .app-shell {
-  --app-bg: #0b1020;
-  --app-surface: rgba(18,26,45,.88);
-  --app-surface-muted: #111a2d;
-  --app-border: #26334e;
-  --app-text: #eef2ff;
-  --app-muted: #a5b2ca;
-  --app-accent: #8b85ff;
+  --app-bg: #0f172a;
+  --app-surface: #111827;
+  --app-surface-muted: #1e293b;
+  --app-border: #334155;
+  --app-text: #f8fafc;
+  --app-muted: #cbd5e1;
+  --app-accent: #a5b4fc;
   background: var(--app-bg);
 }
 .dark .app-shell main, .dark .app-shell { background: var(--app-bg) !important; }
-.dark .app-shell .hero-surface { background: linear-gradient(115deg, #121a2e 0%, #121b34 55%, #162343 100%) !important; }
-.dark .app-shell .hero-surface::after { background: radial-gradient(circle, rgba(110,104,255,.28), transparent 65%); }
+.dark .app-shell .hero-surface { background: #111827 !important; }
+.dark .app-shell .hero-surface::after { display: none; }
 .dark .app-shell .bg-white, .dark .app-shell .bg-white\/90, .dark .app-shell .bg-white\/95 { background-color: var(--app-surface) !important; }
 .dark .app-shell .bg-zinc-50, .dark .app-shell .bg-slate-100, .dark .app-shell .bg-zinc-100 { background-color: var(--app-surface-muted) !important; }
 .dark .app-shell .border-zinc-200, .dark .app-shell .border-zinc-100, .dark .app-shell .border-zinc-300 { border-color: var(--app-border) !important; }
 .dark .app-shell .border-zinc-900 { border-color: #3a4b6e !important; }
 .dark .app-shell .text-zinc-900 { color: var(--app-text) !important; }
-.dark .app-shell .text-zinc-700 { color: #d2dbed !important; }
+.dark .app-shell .text-zinc-700 { color: #e2e8f0 !important; }
 .dark .app-shell .text-zinc-600, .dark .app-shell .text-zinc-500 { color: var(--app-muted) !important; }
-.dark .app-shell .text-zinc-400 { color: #7f90ac !important; }
+.dark .app-shell .text-zinc-400 { color: #94a3b8 !important; }
 .dark .app-shell .hover\:bg-zinc-50:hover, .dark .app-shell .hover\:bg-zinc-100:hover { background-color: #202c45 !important; }
 .dark .app-shell .shadow-sm { box-shadow: 0 10px 30px rgba(0,0,0,.22); }
 
-@media (max-width: 1279px) {
+@media (min-width: 768px) and (max-width: 1279px) {
   .app-shell > .flex-1 > aside:last-of-type { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 }
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .app-shell > .flex-1 > aside:last-of-type { display: flex; }
+}
+@media (max-width: 639px) {
   .app-shell .hero-surface { padding-top: 1.8rem; padding-bottom: 1.8rem; }
   .app-shell .scene-canvas-wrapper { height: 360px; }
 }

@@ -1,24 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    (function() {
+      if (localStorage.getItem('portfolio-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Faizan Firdousi | Skills</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    .cluster-cta {
+      position: absolute;
+      top: 1.5rem;
+      right: 4.5rem;
+      left: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .cluster-cta:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     :root {
       --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
-      --accent: #0f766e; --text: #0f172a; --muted: #64748b; --green: #059669;
+      --accent: #0f766e; --text: #0f172a; --muted: #475569; --green: #059669;
     }
     .dark {
-      --bg: #0a0e1a;
+      --bg: #0f172a;
       --surface: #111827;
-      --border: #1f2937;
-      --accent: #14b8a6;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
-      --green: #10b981;
+      --border: #334155;
+      --accent: #5eead4;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --green: #6ee7b7;
     }
     .theme-toggle {
       position: absolute;
@@ -64,13 +97,13 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: #1e293b;
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 9999px;
       padding: 0.25rem 0.75rem;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.7rem;
-      color: var(--muted);
+      color: var(--text);
       margin-bottom: 2rem;
     }
     .pod-badge .dot {
@@ -105,10 +138,11 @@
       font-size: 0.72rem;
       padding: 0.25rem 0.55rem;
       border-radius: 6px;
-      background: rgba(20, 184, 166, 0.12);
-      border: 1px solid rgba(20, 184, 166, 0.25);
-      color: #99f6e4;
+      background: #f0fdfa;
+      border: 1px solid #99f6e4;
+      color: #0f766e;
     }
+    .dark .tag { background: rgba(20, 184, 166, 0.12); border-color: rgba(94, 234, 212, 0.35); color: #99f6e4; }
     .back { margin-top: 2.5rem; }
     .back a {
       color: var(--accent);
@@ -116,9 +150,32 @@
       font-size: 0.8rem;
       text-decoration: none;
     }
+    .page-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+    .metrics-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+    .metrics-panel__title { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .metrics-panel__title:not(:first-child) { margin-top: 1rem; }
+    .metrics-panel__info { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.5rem; font-size: 0.75rem; }
+    .metrics-panel__info-row { display: flex; justify-content: space-between; gap: 0.5rem; }
+    .metrics-panel__info-row .label, .metric-slot__label, .metrics-panel__footer { color: var(--muted); }
+    .metrics-panel__info-row .value { font-family: 'JetBrains Mono', monospace; color: var(--text); text-align: right; word-break: break-all; }
+    .metrics-panel__info-row .accent { color: var(--green); }
+    .metrics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+    .metric-slot { display: flex; flex-direction: column; align-items: center; min-width: 0; padding: 0.45rem 0.35rem; border: 1px dashed var(--border); border-radius: 8px; text-align: center; }
+    .metric-slot__label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric-slot__value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text); margin: 0.15rem 0; }
+    .metric-slot__hint { font-size: 0.55rem; color: var(--muted); }
+    .metrics-panel__footer { margin-top: 0.85rem; padding-top: 0.65rem; border-top: 1px dashed var(--border); font: 0.62rem 'JetBrains Mono', monospace; text-align: center; }
+    @media (min-width: 960px) { .page-layout { grid-template-columns: minmax(0, 1fr) 280px; } .metrics-panel { position: sticky; top: 1.5rem; } }
+    @media (max-width: 640px) { .container { padding: 1rem 0.85rem; } .metrics-panel__info-row { flex-direction: column; gap: 0.15rem; } .metrics-panel__info-row .value { text-align: left; } }
+    @media (max-width: 380px) { .metrics-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
+  
+  <a href="/" class="cluster-cta" aria-label="View Live Cluster">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+    View Live Cluster
+  </a>
   <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
     <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
@@ -133,8 +190,10 @@
       namespace: skills · served by nginx pod
     </div>
 
-    <h1>Skills</h1>
-    <p class="subtitle">Tools and platforms I work with day to day.</p>
+    <div class="page-layout">
+      <main class="page-main">
+        <h1>Skills</h1>
+        <p class="subtitle">Tools and platforms I work with day to day.</p>
 
     <div class="grid">
       <section class="card">
@@ -197,7 +256,39 @@
       </section>
     </div>
 
-    <p class="back"><a href="/">← Back to cluster dashboard</a></p>
+        <p class="back"><a href="/">← Back to cluster dashboard</a></p>
+      </main>
+
+      <aside class="metrics-panel" aria-label="Pod and service metrics" data-namespace="skills">
+        <div class="metrics-panel__title">// Pod info</div>
+        <div class="metrics-panel__info">
+          <div class="metrics-panel__info-row"><span class="label">Namespace</span><span class="value">skills</span></div>
+          <div class="metrics-panel__info-row"><span class="label">Pod</span><span class="value accent" data-live="pod-name">skills-*</span></div>
+          <div class="metrics-panel__info-row"><span class="label">Status</span><span class="value accent" data-live="pod-status">Running</span></div>
+          <div class="metrics-panel__info-row"><span class="label">Service</span><span class="value">skills-svc</span></div>
+        </div>
+        <div class="metrics-panel__title">// Pod metrics</div>
+        <div class="metrics-grid">
+          <div class="metric-slot"><span class="metric-slot__label">CPU</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Prometheus</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Memory</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Prometheus</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Restarts</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">kube-state-metrics</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Uptime</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Prometheus</span></div>
+        </div>
+        <div class="metrics-panel__title">// Service metrics</div>
+        <div class="metrics-grid">
+          <div class="metric-slot"><span class="metric-slot__label">Requests/s</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Traefik</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">P99 Latency</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Prometheus</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Error Rate</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Prometheus</span></div>
+        </div>
+        <div class="metrics-panel__title">// skills metrics</div>
+        <div class="metrics-grid">
+          <div class="metric-slot"><span class="metric-slot__label">Skills Loaded</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Startup</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Render Time</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Custom</span></div>
+          <div class="metric-slot"><span class="metric-slot__label">Asset Cache</span><span class="metric-slot__value">—</span><span class="metric-slot__hint">Nginx</span></div>
+        </div>
+        <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
+      </aside>
+    </div>
   </div>
   <script>
     const toggleBtn = document.getElementById('theme-toggle-btn');
@@ -217,6 +308,32 @@
         else { root.classList.remove('dark'); }
       }
     });
+    (function () {
+      const panel = document.querySelector('.metrics-panel[data-namespace]');
+      if (!panel) return;
+      const updateMetrics = async () => {
+        try {
+          const response = await fetch('/api/topology');
+          if (!response.ok) return;
+          const topology = await response.json();
+          const pod = topology.pods?.find((item) => item.namespace === panel.dataset.namespace);
+          if (!pod) return;
+          panel.querySelector('[data-live="pod-name"]').textContent = pod.name;
+          const status = panel.querySelector('[data-live="pod-status"]');
+          status.textContent = pod.status;
+          status.className = `value ${pod.status === 'Running' ? 'accent' : ''}`;
+          panel.querySelectorAll('.metric-slot').forEach((slot) => {
+            const label = slot.querySelector('.metric-slot__label')?.textContent.trim().toLowerCase();
+            const value = slot.querySelector('.metric-slot__value');
+            if (!value) return;
+            if (label === 'restarts') value.textContent = pod.restarts;
+            if (label === 'uptime') value.textContent = pod.age || '—';
+          });
+        } catch (_) { /* Keep unavailable metrics as Phase 2 placeholders. */ }
+      };
+      updateMetrics();
+      window.setInterval(updateMetrics, 10000);
+    })();
   </script>
 </body>
 </html>

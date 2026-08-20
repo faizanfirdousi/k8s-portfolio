@@ -50,10 +50,10 @@ echo "==> [2/5] Waiting for Traefik ingress controller..."
 # k3s installs Traefik asynchronously via a Helm job after the cluster starts.
 # On a fresh cluster the deployment may not exist yet — wait for it first.
 echo "    Waiting for Traefik to be installed..."
-deadline=$((SECONDS + 120))
+deadline=$((SECONDS + 300))
 until kubectl get deployment traefik -n kube-system &>/dev/null; do
   if (( SECONDS >= deadline )); then
-    echo "    ERROR: Traefik deployment did not appear within 120s"
+    echo "    ERROR: Traefik deployment did not appear within 300s"
     exit 1
   fi
   sleep 2
@@ -62,7 +62,7 @@ done
 echo "    Waiting for Traefik deployment to be ready..."
 kubectl rollout status deployment/traefik \
   --namespace kube-system \
-  --timeout=120s
+  --timeout=300s
 
 echo ""
 echo "==> [3/5] Building Docker images..."

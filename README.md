@@ -74,18 +74,35 @@ http://localhost:8080/api/topology → Live cluster topology JSON
 ## Production Deployment (Phase 5)
 
 > [!NOTE]
-> Requires a VPS with Ubuntu 22.04 and a domain name. See Phase 5 in the implementation plan.
+> Requires a VPS with Ubuntu 22.04 and a domain name. 
 
+For production, it is highly recommended to build your Docker images locally and push them to a container registry like Docker Hub, rather than building them on your VPS.
+
+### 1. Build and Push Images
 ```bash
-# Install k3s on the VPS
-curl -sfL https://get.k3s.io | sh -
+export DOCKER_USER="yourusername"
+# Example for frontend:
+docker build -t $DOCKER_USER/portfolio-frontend:latest ./services/frontend
+docker push $DOCKER_USER/portfolio-frontend:latest
+# Repeat for about, projects, blog, contact, proxy
+```
+*Note: Update the `image:` paths in your `manifests` to point to your Docker Hub images before applying them to production.*
 
-# Install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+### 2. Provision the VPS (AWS EC2, DigitalOcean, etc.)
+Transfer and run the provision script on your fresh Ubuntu instance:
+```bash
+scp scripts/aws-provision.sh ubuntu@<your-vps-ip>:~/
+ssh ubuntu@<your-vps-ip>
+./aws-provision.sh
+```
 
-# Apply all manifests (same as local, but against the production context)
-kubectl config use-context <production-context>
-./scripts/local-up.sh  # works for prod too, just uses a different context
+### 3. Deploy
+On your VPS, clone your repository and apply the updated manifests:
+```bash
+git clone https://github.com/faizanfirdousi/k8s-portfolio.git
+cd k8s-portfolio
+kubectl apply -f manifests/namespaces.yaml
+kubectl apply -R -f manifests/
 ```
 
 ## Security

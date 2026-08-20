@@ -8,12 +8,14 @@ import PodDetailDrawer from './components/PodDetailDrawer';
 import { useTopology } from './hooks/useTopology';
 import { usePodDetail } from './hooks/usePodDetail';
 import { useEvents } from './hooks/useEvents';
+import { usePageMetrics } from './hooks/usePageMetrics';
 import type { PodRef } from './types/topology';
 
 type View = 'cluster' | 'table';
 
 function App() {
-  const { data, error, lastUpdated, frontendPod } = useTopology();
+  const { data, error, lastUpdated, responseTimeMs, frontendPod } = useTopology();
+  const pageMetrics = usePageMetrics();
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPod, setSelectedPod] = useState<PodRef | null>(null);
   const [view, setView] = useState<View>('cluster');
@@ -57,6 +59,8 @@ function App() {
           view={view}
           onViewChange={setView}
           darkMode={darkMode}
+          pageMetrics={pageMetrics}
+          topologyResponseMs={responseTimeMs}
         />
         <MetricsPanel
           data={data}
@@ -64,6 +68,8 @@ function App() {
           lastUpdated={lastUpdated}
           events={events}
           onPodClick={setSelectedPod}
+          pageMetrics={pageMetrics}
+          topologyResponseMs={responseTimeMs}
         />
       </div>
 

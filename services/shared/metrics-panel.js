@@ -72,6 +72,21 @@ const SECTIONS = {
       { label: 'Validation Errors', hint: 'Custom' },
     ],
   },
+  skills: {
+    namespace: 'skills',
+    podPrefix: 'skills',
+    serviceName: 'skills-svc',
+    serviceMetrics: [
+      { label: 'Requests/s', hint: 'Traefik' },
+      { label: 'P99 Latency', hint: 'Prometheus' },
+      { label: 'Error Rate', hint: 'Prometheus' },
+    ],
+    extraMetrics: [
+      { label: 'Skills Loaded', hint: 'Startup' },
+      { label: 'Render Time', hint: 'Custom' },
+      { label: 'Asset Cache', hint: 'Nginx' },
+    ],
+  },
 };
 
 function metricSlot(label, hint) {
@@ -144,7 +159,7 @@ function metricsPanelCss() {
       align-items: center;
       padding: 0.45rem 0.35rem;
       border-radius: 8px;
-      border: 1px dashed rgba(148, 163, 184, 0.25);
+      border: 1px dashed var(--border);
       background: rgba(255, 255, 255, 0.02);
       text-align: center;
     }
@@ -162,7 +177,7 @@ function metricsPanelCss() {
     }
     .metric-slot__hint {
       font-size: 0.55rem;
-      color: rgba(148, 163, 184, 0.5);
+      color: var(--muted);
     }
     .metrics-panel__footer {
       margin-top: 0.85rem;

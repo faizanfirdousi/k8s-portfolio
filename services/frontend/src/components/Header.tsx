@@ -24,8 +24,8 @@ export default function Header({
   onThemeToggle,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between border-b border-zinc-200 bg-white/90 px-4 backdrop-blur-xl sm:px-6">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-white/90 px-3 backdrop-blur-xl sm:px-6">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Button
           variant="ghost"
           size="icon"
@@ -37,9 +37,9 @@ export default function Header({
           {menuOpen ? <X size={18} /> : <Menu size={18} />}
         </Button>
 
-        <div className="flex items-center gap-2 text-sm font-semibold sm:text-base">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold sm:text-base">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-xs font-bold text-white shadow-lg shadow-indigo-500/30">K</span>
-          <span><span className="text-indigo-600">K8s</span><span className="text-zinc-400">.dev</span><span className="text-zinc-900">/portfolio</span></span>
+          <span className="truncate max-[420px]:hidden"><span className="text-indigo-600">K8s</span><span className="text-zinc-400">.dev</span><span className="text-zinc-900">/portfolio</span></span>
         </div>
 
         <span
@@ -55,7 +55,7 @@ export default function Header({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="shrink-0 flex items-center gap-1 sm:gap-2">
         <Button variant="ghost" size="icon" onClick={onThemeToggle} aria-label={darkMode ? 'Use light mode' : 'Use dark mode'}>
           {darkMode ? <Sun size={17} /> : <Moon size={17} />}
         </Button>

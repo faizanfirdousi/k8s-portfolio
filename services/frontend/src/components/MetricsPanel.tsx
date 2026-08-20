@@ -1,7 +1,6 @@
 import type { TopologyData } from '../hooks/useTopology';
 import type { ClusterEvent, PodRef } from '../types/topology';
-import IncidentReportCard from '@/components/ui/area-chart-1';
-import BentoDashboard from '@/components/ui/bento-dashboard';
+import type { PageMetrics } from '../hooks/usePageMetrics';
 import { cn } from '@/lib/utils';
 
 interface MetricsPanelProps {
@@ -10,6 +9,13 @@ interface MetricsPanelProps {
   lastUpdated: Date | null;
   events: ClusterEvent[];
   onPodClick: (ref: PodRef) => void;
+  pageMetrics: PageMetrics;
+  topologyResponseMs: number | null;
+}
+
+function formatMilliseconds(value: number | null) {
+  if (value === null) return 'Measuring…';
+  return value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${value} ms`;
 }
 
 export default function MetricsPanel({
@@ -18,16 +24,13 @@ export default function MetricsPanel({
   lastUpdated,
   events,
   onPodClick,
+  pageMetrics,
+  topologyResponseMs,
 }: MetricsPanelProps) {
   const runningPods = data?.pods.filter((p) => p.status === 'Running').length ?? 0;
-  const pendingPods = data?.pods.filter((p) => p.status === 'Pending').length ?? 0;
   const readyNodes = data?.nodes.filter((n) => n.status === 'Ready').length ?? 0;
   const namespaceCount = data ? new Set(data.pods.map((p) => p.namespace)).size : 0;
   const totalRestarts = data?.pods.reduce((sum, p) => sum + p.restarts, 0) ?? 0;
-  const readyPct = data?.pods.length
-    ? Math.round((runningPods / data.pods.length) * 100)
-    : 85;
-
   return (
     <aside className="flex w-full flex-col gap-4 border-t-2 border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:border-l xl:border-t-0 2xl:w-96">
       <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
@@ -66,15 +69,23 @@ export default function MetricsPanel({
         </div>
       </section>
 
-      <div className="hidden xl:block">
-        <IncidentReportCard
-          runningPods={runningPods}
-          pendingPods={pendingPods}
-          eventCount={events.length || data?.pods.length || 0}
-        />
-      </div>
-
-      <BentoDashboard podCount={data?.pods.length ?? 7} readyPct={readyPct} compact />
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-zinc-700">Request delivery</h3>
+        <p className="mb-3 text-xs text-zinc-500">Measured in this browser for your visit.</p>
+        <dl className="space-y-2 text-sm">
+          {[
+            { label: 'Page loaded', value: formatMilliseconds(pageMetrics.loadMs) },
+            { label: 'Server response', value: formatMilliseconds(pageMetrics.ttfbMs) },
+            { label: 'Cluster API fetch', value: formatMilliseconds(topologyResponseMs) },
+            { label: 'Snapshot age', value: lastUpdated ? 'Live · ≤ 5 s' : 'Waiting' },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex justify-between gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
+              <dt className="text-zinc-500">{label}</dt>
+              <dd className="mono text-right text-xs font-semibold text-zinc-800">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
         <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-zinc-700">Live Activity</h3>

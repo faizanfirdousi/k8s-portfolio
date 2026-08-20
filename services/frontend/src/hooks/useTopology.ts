@@ -7,12 +7,14 @@ export function useTopology(pollMs = 5000) {
   const [data, setData] = useState<TopologyData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [responseTimeMs, setResponseTimeMs] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchTopology = async () => {
       try {
+        const startedAt = performance.now();
         const res = await fetch('/api/topology');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: TopologyData = await res.json();
@@ -20,6 +22,7 @@ export function useTopology(pollMs = 5000) {
           setData(json);
           setError(null);
           setLastUpdated(new Date());
+          setResponseTimeMs(Math.round(performance.now() - startedAt));
         }
       } catch (err) {
         if (!cancelled) {
@@ -38,5 +41,5 @@ export function useTopology(pollMs = 5000) {
 
   const frontendPod = data?.pods.find((p) => p.namespace === 'frontend');
 
-  return { data, error, lastUpdated, frontendPod };
+  return { data, error, lastUpdated, responseTimeMs, frontendPod };
 }

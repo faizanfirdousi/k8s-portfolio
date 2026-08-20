@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    (function() {
+      if (localStorage.getItem('portfolio-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Faizan Firdousi — Cloud Engineer & Go Developer from Pune. Building cloud infrastructure, backend systems in Go, and learning AI." />
@@ -8,16 +16,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    .cluster-cta {
+      position: absolute;
+      top: 1.5rem;
+      right: 4.5rem;
+      left: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+      z-index: 50;
+    }
+    .cluster-cta:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     /* ─── Design tokens ─── */
     :root {
       --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
       --accent: #4f46e5; --accent2: #0891b2; --text: #0f172a;
-      --muted: #64748b; --green: #059669; --tag-bg: #f1f5f9;
+      --muted: #475569; --green: #047857; --tag-bg: #f1f5f9;
     }
     .dark {
-      --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
-      --accent: #6366f1; --accent2: #06b6d4; --text: #f1f5f9;
-      --muted: #94a3b8; --green: #10b981; --tag-bg: #1e293b;
+      --bg: #0f172a; --surface: #111827; --border: #334155;
+      --accent: #a5b4fc; --accent2: #67e8f9; --text: #f8fafc;
+      --muted: #cbd5e1; --green: #6ee7b7; --tag-bg: #1e293b;
     }
     .theme-toggle {
       position: absolute;
@@ -314,7 +347,7 @@
       align-items: center;
       padding: 0.45rem 0.35rem;
       border-radius: 8px;
-      border: 1px dashed rgba(148, 163, 184, 0.25);
+      border: 1px dashed var(--border);
       background: rgba(255, 255, 255, 0.02);
       text-align: center;
     }
@@ -332,7 +365,7 @@
     }
     .metric-slot__hint {
       font-size: 0.55rem;
-      color: rgba(148, 163, 184, 0.5);
+      color: var(--muted);
     }
     .metrics-panel__footer {
       margin-top: 0.85rem;
@@ -370,6 +403,11 @@
     }  </style>
 </head>
 <body>
+  
+  <a href="/" class="cluster-cta" aria-label="View Live Cluster">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+    View Live Cluster
+  </a>
   <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
     <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
@@ -478,45 +516,20 @@
       </div>
     </div>
 
-    <!-- Experience & Education timeline -->
-    <div class="section-title">// Education &amp; Milestones</div>
+    <!-- Education -->
+    <div class="section-title">// Education</div>
     <div class="timeline">
       <div class="timeline-item">
         <div class="timeline-dot">🎓</div>
         <div class="timeline-content">
           <div class="company">International Institute of Information Technology (I²IT), Pune</div>
-          <div class="period">B.E. in Computer Science</div>
-          <div class="desc">Pursuing Bachelor of Engineering in Computer Science. Focused on cloud computing, systems programming, and modern software development.</div>
-        </div>
-      </div>
-      <div class="timeline-item">
-        <div class="timeline-dot">⚡</div>
-        <div class="timeline-content">
-          <div class="company">Container From Scratch in Go</div>
-          <div class="period">Systems Project</div>
-          <div class="desc">Built an isolated container runtime in Go utilizing Linux namespaces, chroot, and cgroup v2 for process isolation and CPU/memory/PID resource limits.</div>
-        </div>
-      </div>
-      <div class="timeline-item">
-        <div class="timeline-dot">☁️</div>
-        <div class="timeline-content">
-          <div class="company">Cloud URL Shortener &amp; CI/CD Pipeline</div>
-          <div class="period">Cloud &amp; DevOps Project</div>
-          <div class="desc">Engineered a URL shortener service with Go, PostgreSQL, and Redis, deployed on AWS EC2 with Docker Compose and automated GitHub Actions CI/CD.</div>
-        </div>
-      </div>
-      <div class="timeline-item">
-        <div class="timeline-dot">🤖</div>
-        <div class="timeline-content">
-          <div class="company">AI Detective Game</div>
-          <div class="period">AI &amp; Cloud Project</div>
-          <div class="desc">Created an AI-powered case investigation app on DigitalOcean featuring RAG-backed witness chat, dynamic evidence boards, and deduction mechanics.</div>
+          <div class="period">2024 – 2028</div>
         </div>
       </div>
     </div>
 
       </div><!-- /.page-main -->
-    <aside class="metrics-panel" aria-label="Pod and service metrics">
+    <aside class="metrics-panel" aria-label="Pod and service metrics" data-namespace="about">
       <div class="metrics-panel__title">// Pod info</div>
       <div class="metrics-panel__info">
         <div class="metrics-panel__info-row">
@@ -525,11 +538,11 @@
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Pod</span>
-          <span class="value accent">about-*</span>
+          <span class="value accent" data-live="pod-name">about-*</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Status</span>
-          <span class="value accent">Running</span>
+          <span class="value accent" data-live="pod-status">Running</span>
         </div>
         <div class="metrics-panel__info-row">
           <span class="label">Service</span>
@@ -571,8 +584,8 @@
           <span class="metric-slot__value">—</span>
           <span class="metric-slot__hint">Prometheus</span>
         </div>
-        <div class="metric-slot" data-metric="bytes-out">
-          <span class="metric-slot__label">Bytes Out</span>
+        <div class="metric-slot" data-metric="error-rate">
+          <span class="metric-slot__label">Error Rate</span>
           <span class="metric-slot__value">—</span>
           <span class="metric-slot__hint">Prometheus</span>
         </div>
@@ -590,7 +603,7 @@
           <span class="metric-slot__hint">Nginx</span>
         </div>
       </div>
-      <div class="metrics-panel__footer">Metrics wired via Prometheus — coming soon</div>
+      <div class="metrics-panel__footer">Pod data live · CPU/Memory in Phase 2</div>
     </aside>
     </div><!-- /.page-layout -->
   </div>
@@ -612,6 +625,37 @@
         else { root.classList.remove('dark'); }
       }
     });
+
+    (function () {
+      const panel = document.querySelector('.metrics-panel[data-namespace]');
+      if (!panel) return;
+
+      const updateMetrics = async () => {
+        try {
+          const response = await fetch('/api/topology');
+          if (!response.ok) return;
+          const topology = await response.json();
+          const pod = topology.pods?.find((item) => item.namespace === panel.dataset.namespace);
+          if (!pod) return;
+
+          panel.querySelector('[data-live="pod-name"]').textContent = pod.name;
+          const status = panel.querySelector('[data-live="pod-status"]');
+          status.textContent = pod.status;
+          status.className = `value ${pod.status === 'Running' ? 'accent' : ''}`;
+
+          panel.querySelectorAll('.metric-slot').forEach((slot) => {
+            const label = slot.querySelector('.metric-slot__label')?.textContent.trim().toLowerCase();
+            const value = slot.querySelector('.metric-slot__value');
+            if (!value) return;
+            if (label === 'restarts') value.textContent = pod.restarts;
+            if (label === 'uptime') value.textContent = pod.age || '—';
+          });
+        } catch (_) { /* Keep the planned Prometheus fields as placeholders. */ }
+      };
+
+      updateMetrics();
+      window.setInterval(updateMetrics, 10000);
+    })();
   </script>
 </body>
 </html>
