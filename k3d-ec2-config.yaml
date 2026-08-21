@@ -25,6 +25,11 @@ ports:
 
 image: rancher/k3s:v1.29.2-k3s1
 
+# Bind the Kubernetes API to localhost only — never expose it on 0.0.0.0
+kubeAPI:
+  hostIP: "127.0.0.1"
+  hostPort: "6443"
+
 options:
   k3s:
     extraArgs:
