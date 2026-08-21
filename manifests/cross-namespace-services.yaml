@@ -3,7 +3,7 @@
 # THE CROSS-NAMESPACE ROUTING PROBLEM:
 # ──────────────────────────────────────
 # Our IngressRoute lives in the "default" namespace.
-# Our services live in different namespaces (about, projects, blog, contact, proxy, frontend).
+# Our services live in different namespaces (about, projects, skills, blog, contact, proxy, frontend).
 #
 # Standard Kubernetes Ingress can only route to Services in the SAME namespace.
 # Traefik IngressRoute has the same limitation when referencing Services by name.
@@ -54,6 +54,18 @@ metadata:
 spec:
   type: ExternalName
   externalName: blog.blog.svc.cluster.local
+  ports:
+    - port: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skills
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: skills.skills.svc.cluster.local
   ports:
     - port: 80
 

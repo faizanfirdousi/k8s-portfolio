@@ -863,15 +863,14 @@ func setSecurityHeaders(w http.ResponseWriter) {
 func setCORS(w http.ResponseWriter, r *http.Request) {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGINS")
 	origin := r.Header.Get("Origin")
-	if allowedOrigin != "" && origin != "" {
-		for _, o := range strings.Split(allowedOrigin, ",") {
-			if strings.TrimSpace(o) == origin || strings.TrimSpace(o) == "*" {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				break
-			}
+	if allowedOrigin == "" || origin == "" {
+		return
+	}
+	for _, o := range strings.Split(allowedOrigin, ",") {
+		if strings.TrimSpace(o) == origin || strings.TrimSpace(o) == "*" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			break
 		}
-	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")

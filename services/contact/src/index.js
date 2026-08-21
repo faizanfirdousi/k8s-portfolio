@@ -8,10 +8,12 @@
 'use strict';
 
 const express = require('express');
+const fetch = require('node-fetch');
 const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const CONTACT_WEBHOOK_URL = process.env.CONTACT_WEBHOOK_URL || '';
 
 // Security headers middleware
 app.use((req, res, next) => {
@@ -201,8 +203,8 @@ function contactPageHtml(errorMessage = '') {
   <div class="container">
     <div class="page-layout">
       <div class="page-main">
-    <div class="breadcrumb"><span>~/portfolio</span> / contact</div>
-    <div class="pod-badge"><div class="dot"></div>Served by <code>contact-*</code> pod in <code>ns/contact</code></div>
+    <div class="breadcrumb"><a href="/">~/portfolio</a> / contact</div>
+    <div class="pod-badge"><div class="dot"></div>Served by <code data-live="pod-name">contact-*</code> pod in <code>ns/contact</code></div>
 
     <h1>Say hello.</h1>
     <p class="subtitle">
@@ -337,14 +339,28 @@ app.post(['/contact/submit', '/submit'], (req, res) => {
   }
 
   // Log sanitized structured submission
-  console.log(JSON.stringify({
+  const submission = {
     event: 'contact_form_submission',
     timestamp: new Date().toISOString(),
     name: trimmedName.replace(/[\r\n]/g, ' '),
     email: trimmedEmail.replace(/[\r\n]/g, ' '),
     messageLength: trimmedMessage.length,
     podName: process.env.HOSTNAME || 'local',
-  }));
+  };
+  console.log(JSON.stringify(submission));
+
+  if (CONTACT_WEBHOOK_URL) {
+    fetch(CONTACT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...submission,
+        message: trimmedMessage,
+      }),
+    }).catch((err) => {
+      console.error('[contact] Failed to deliver webhook:', err.message);
+    });
+  }
 
   res.setHeader('Content-Type', 'text/html');
   res.send(successPage(trimmedName));

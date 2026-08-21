@@ -10,6 +10,7 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const { marked } = require('marked');
+const sanitizeHtml = require('sanitize-html');
 let metricsPanelCss = () => '';
 let renderMetricsPanel = () => '';
 try {
@@ -40,6 +41,25 @@ const PORT = process.env.PORT || 3000;
 const DEVTO_USERNAME = process.env.DEVTO_USERNAME || 'faizanfirdousi';
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '300000', 10); // 5 min default
 const FETCH_TIMEOUT_MS = 8000; // 8s timeout to prevent thread hangs
+
+const SANITIZE_OPTIONS = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code', 'blockquote', 'figure', 'figcaption']),
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+    a: ['href', 'name', 'target', 'rel'],
+    code: ['class'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  transformTags: {
+    a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }),
+  },
+};
+
+function sanitizeArticleHtml(html) {
+  if (typeof html !== 'string' || !html) return '';
+  return sanitizeHtml(html, SANITIZE_OPTIONS);
+}
 
 // ── In-Memory Caches ─────────────────────────────────────────────────────────
 let articlesCache = { data: null, fetchedAt: 0 };
@@ -194,7 +214,7 @@ async function fetchDevToArticleDetail(slug) {
       reactionsCount: typeof article.public_reactions_count === 'number' ? article.public_reactions_count : 0,
       commentsCount: typeof article.comments_count === 'number' ? article.comments_count : 0,
       tags: Array.isArray(article.tag_list) ? article.tag_list : (typeof article.tags === 'string' ? article.tags.split(',').map(t => t.trim()) : []),
-      bodyHtml: article.body_html || (article.body_markdown ? marked(article.body_markdown) : ''),
+      bodyHtml: sanitizeArticleHtml(article.body_html || (article.body_markdown ? marked(article.body_markdown) : '')),
       author: article.user ? {
         name: article.user.name || '',
         username: article.user.username || '',
@@ -400,7 +420,7 @@ app.get(['/', '/blog', '/blog/'], async (req, res) => {
 
   const listHTML = `
     <div class="breadcrumb"><a href="/">~/portfolio</a> / blog</div>
-    <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
+    <div class="pod-badge"><div class="dot"></div>Served by <code data-live="pod-name">blog-*</code> pod in <code>ns/blog</code></div>
     <h1 class="page-title">Blog</h1>
     <p class="page-subtitle">
       Real technical writeups on Kubernetes, Go, systems, and databases. Fetched live via the DEV.to API from
@@ -488,7 +508,7 @@ app.get(['/blog/:slug', '/:slug'], async (req, res) => {
 
   const postHTML = `
     <a href="/blog" class="back-link">← Back to All Articles</a>
-    <div class="pod-badge"><div class="dot"></div>Served by <code>blog-*</code> pod in <code>ns/blog</code></div>
+    <div class="pod-badge"><div class="dot"></div>Served by <code data-live="pod-name">blog-*</code> pod in <code>ns/blog</code></div>
 
     ${safeCover ? `<img src="${safeCover}" alt="${safeTitle}" class="post-cover-img" />` : ''}
 

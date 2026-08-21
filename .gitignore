@@ -25,9 +25,13 @@ build/
 # Kubernetes & Cloud Credentials
 .kube/
 kubeconfig*
+prod-kubeconfig.yaml
 *.kubeconfig
 credentials
 *.tfstate*
+
+# Compiled binaries
+services/proxy/proxy
 
 # IDE & Editor files
 .vscode/

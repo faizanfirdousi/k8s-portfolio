@@ -125,9 +125,28 @@ kubectl apply -f "$ROOT_DIR/manifests/monitoring/"
 echo "    Applying NetworkPolicies..."
 kubectl apply -f "$ROOT_DIR/manifests/network-policies/"
 
+# Cross-namespace service aliases (fallback routing pattern)
+kubectl apply -f "$ROOT_DIR/manifests/cross-namespace-services.yaml"
 
 # Then: the IngressRoute (routes traffic to services that now exist)
 kubectl apply -f "$ROOT_DIR/manifests/ingress.yaml"
+
+echo "    Patching deployments to use local images..."
+declare -A SERVICE_NS=(
+  [about]=about
+  [projects]=projects
+  [skills]=skills
+  [blog]=blog
+  [contact]=contact
+  [proxy]=proxy
+  [frontend]=frontend
+)
+for SERVICE in "${SERVICES[@]}"; do
+  NS="${SERVICE_NS[$SERVICE]}"
+  kubectl set image "deployment/$SERVICE" -n "$NS" "$SERVICE=portfolio/$SERVICE:local"
+  kubectl patch deployment "$SERVICE" -n "$NS" --type=json \
+    -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]'
+done
 
 echo ""
 echo "=========================================="

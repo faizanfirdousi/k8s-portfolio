@@ -1,49 +1,84 @@
 #!/bin/bash
 # aws-provision.sh
-# Run this on a fresh Ubuntu 22.04 EC2 instance to set up K3s for the portfolio
+# Run on a fresh Ubuntu 22.04 EC2 instance to create a multi-node k3d cluster.
+# The cluster API is bound to localhost only — use an SSH tunnel for remote kubectl.
 
-set -e
+set -euo pipefail
 
-echo "Starting K3s installation for Portfolio..."
+REPO_DIR="${REPO_DIR:-$HOME/k8s-portfolio}"
+CERT_MANAGER_EMAIL="${CERT_MANAGER_EMAIL:-portfolio@example.com}"
+PORTFOLIO_DOMAIN="${PORTFOLIO_DOMAIN:-}"
 
-# 1. Install K3s (Lightweight Kubernetes)
-# We disable traefik here if we want to use the ingress.yaml natively, but k3s comes with traefik out of the box.
-# For our portfolio, we will use the built-in traefik.
-curl -sfL https://get.k3s.io | sh -
+echo "==> Installing Docker..."
+if ! command -v docker &>/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker "$USER"
+  echo "Docker installed. You may need to log out and back in for group membership."
+fi
 
-# Wait for node to be ready
-echo "Waiting for k3s to be ready..."
-sleep 15
-sudo k3s kubectl get node
+echo "==> Installing k3d..."
+if ! command -v k3d &>/dev/null; then
+  curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+fi
 
-# 2. Setup KUBECONFIG for ubuntu user
-mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown ubuntu:ubuntu ~/.kube/config
-echo "export KUBECONFIG=~/.kube/config" >> ~/.bashrc
-export KUBECONFIG=~/.kube/config
+echo "==> Installing kubectl..."
+if ! command -v kubectl &>/dev/null; then
+  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+  chmod +x kubectl
+  sudo mv kubectl /usr/local/bin/kubectl
+fi
 
-# 3. Install Cert-Manager for HTTPS (Let's Encrypt)
-echo "Installing cert-manager..."
+if [ ! -d "$REPO_DIR" ]; then
+  echo "ERROR: Repository not found at $REPO_DIR"
+  echo "Clone the repo first, e.g.:"
+  echo "  git clone https://github.com/faizanfirdousi/k8s-portfolio.git $REPO_DIR"
+  exit 1
+fi
+
+cd "$REPO_DIR"
+
+echo "==> Creating multi-node k3d cluster (1 server + 2 agents)..."
+if k3d cluster list 2>/dev/null | grep -q '^portfolio'; then
+  echo "    Cluster 'portfolio' already exists — skipping creation"
+else
+  k3d cluster create --config "$REPO_DIR/k3d-ec2-config.yaml" \
+    --volume "$REPO_DIR/manifests/traefik-helm-config.yaml:/var/lib/rancher/k3s/server/manifests/traefik-helm-config.yaml@server:*"
+fi
+
+export KUBECONFIG="$HOME/.kube/config"
+mkdir -p "$HOME/.kube"
+k3d kubeconfig merge portfolio --kubeconfig-merge-default --kubeconfig-switch-context
+
+echo "==> Waiting for Traefik..."
+kubectl rollout status deployment/traefik -n kube-system --timeout=300s
+
+echo "==> Installing cert-manager..."
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-
-echo "Waiting for cert-manager pods to be ready..."
 kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=300s
 
-# 4. Clone repository (assuming you have pushed it to GitHub)
-# echo "Cloning portfolio repository..."
-# git clone https://github.com/faizanfirdousi/k8s-portfolio.git
-# cd k8s-portfolio
+if [ -n "$PORTFOLIO_DOMAIN" ]; then
+  echo "==> Configuring TLS for $PORTFOLIO_DOMAIN..."
+  sed "s/portfolio@example.com/$CERT_MANAGER_EMAIL/g" manifests/tls/cluster-issuer.yaml | kubectl apply -f -
+  sed "s/PORTFOLIO_DOMAIN/$PORTFOLIO_DOMAIN/g" manifests/tls/certificate.yaml | kubectl apply -f -
+  kubectl delete ingressroute portfolio -n default --ignore-not-found
+  kubectl apply -f manifests/tls/ingress-tls.yaml
+else
+  echo "    Skipping TLS (set PORTFOLIO_DOMAIN to enable Let's Encrypt)."
+fi
 
 echo "==========================================================="
-echo "K3s is up and running!"
+echo "k3d cluster is ready on this EC2 instance."
 echo ""
-echo "Next Steps:"
-echo "1. Ensure AWS Security Group allows inbound on TCP 80 and 443."
-echo "2. Point your domain (e.g., k8s.dev) to this EC2 instance's Elastic IP."
-echo "3. Update your Kubernetes manifests (in manifests/ deployment files) to pull images from Docker Hub instead of locally built images."
-echo "   Example: image: yourdockerhubuser/portfolio-frontend:latest"
-echo "4. Apply your manifests:"
-echo "   kubectl apply -f manifests/namespaces.yaml"
-echo "   kubectl apply -R -f manifests/"
+echo "Security:"
+echo "  - Only ports 80 and 443 are published to the internet."
+echo "  - The Kubernetes API is NOT exposed publicly."
+echo ""
+echo "Remote kubectl (from your laptop):"
+echo "  ssh -L 6443:127.0.0.1:6443 ubuntu@<ec2-ip>"
+echo "  k3d kubeconfig get portfolio > prod-kubeconfig.yaml"
+echo "  # Edit server URL to https://127.0.0.1:6443"
+echo ""
+echo "Deploy the portfolio:"
+echo "  ./scripts/publish-images.sh <dockerhub-user>"
+echo "  PORTFOLIO_DOMAIN=your.domain ./scripts/deploy-to-aws.sh"
 echo "==========================================================="

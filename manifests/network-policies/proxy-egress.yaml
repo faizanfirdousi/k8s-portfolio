@@ -1,7 +1,6 @@
 # manifests/network-policies/proxy-egress.yaml
 #
-# Allows the proxy service in the `proxy` namespace to communicate with the
-# Kubernetes API Server (default service or control plane).
+# Allows the proxy to reach the Kubernetes API and Prometheus only.
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -16,13 +15,25 @@ spec:
     - Egress
   egress:
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: TCP
           port: 443
         - protocol: TCP
           port: 6443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
         - protocol: TCP
           port: 9090
-

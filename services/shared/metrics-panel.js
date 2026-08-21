@@ -16,7 +16,7 @@ const SECTIONS = {
   about: {
     namespace: 'about',
     podPrefix: 'about',
-    serviceName: 'about-svc',
+    serviceName: 'about',
     serviceMetrics: [
       { label: 'Requests/s', hint: 'Traefik' },
       { label: 'P99 Latency', hint: 'Prometheus' },
@@ -30,7 +30,7 @@ const SECTIONS = {
   projects: {
     namespace: 'projects',
     podPrefix: 'projects',
-    serviceName: 'projects-svc',
+    serviceName: 'projects',
     serviceMetrics: [
       { label: 'Requests/s', hint: 'Traefik' },
       { label: 'P99 Latency', hint: 'Prometheus' },
@@ -45,7 +45,7 @@ const SECTIONS = {
   blog: {
     namespace: 'blog',
     podPrefix: 'blog',
-    serviceName: 'blog-svc',
+    serviceName: 'blog',
     serviceMetrics: [
       { label: 'Requests/s', hint: 'Traefik' },
       { label: 'P99 Latency', hint: 'Prometheus' },
@@ -60,7 +60,7 @@ const SECTIONS = {
   contact: {
     namespace: 'contact',
     podPrefix: 'contact',
-    serviceName: 'contact-svc',
+    serviceName: 'contact',
     serviceMetrics: [
       { label: 'Requests/s', hint: 'Traefik' },
       { label: 'P99 Latency', hint: 'Prometheus' },
@@ -75,7 +75,7 @@ const SECTIONS = {
   skills: {
     namespace: 'skills',
     podPrefix: 'skills',
-    serviceName: 'skills-svc',
+    serviceName: 'skills',
     serviceMetrics: [
       { label: 'Requests/s', hint: 'Traefik' },
       { label: 'P99 Latency', hint: 'Prometheus' },
@@ -329,6 +329,9 @@ function metricsLiveScript() {
               statusEl.textContent = pod.status;
               statusEl.className = 'value ' + (pod.status === 'Running' ? 'accent' : '');
             }
+            
+            var badgeName = document.querySelector('.pod-badge [data-live="pod-name"]');
+            if (badgeName) badgeName.textContent = pod.name;
 
             var slots = panel.querySelectorAll('.metric-slot');
             slots.forEach(function(slot) {

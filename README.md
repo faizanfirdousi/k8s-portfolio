@@ -57,7 +57,8 @@ Browser → Traefik Ingress → Service → Pod (per section)
 | `/` | `frontend` | frontend | React app + live topology graph |
 | `/about` | `about` | about | Nginx serving static HTML |
 | `/projects` | `projects` | projects | Node/Express + GitHub API integration |
-| `/blog` | `blog` | blog | Node/Express + Markdown renderer |
+| `/skills` | `skills` | skills | Nginx serving static HTML |
+| `/blog` | `blog` | blog | Node/Express + DEV.to API integration |
 | `/contact` | `contact` | contact | Node/Express + contact form API |
 | `/api/*` | `proxy` | proxy | Custom Go binary reading the K8s API |
 
@@ -77,6 +78,22 @@ Browser → Traefik Ingress → Service → Pod (per section)
 ## Why Build It This Way
 
 Anyone can list "Kubernetes" on a resume. I wanted a portfolio that proves it instead of claiming it — where the infrastructure isn't a backstage detail but the whole point of the show. If it's live and you can watch it work, it's a lot harder to fake.
+
+---
+
+## Hosting on AWS EC2 (k3d multi-node)
+
+Production runs **k3d on EC2** (1 server + 2 agents) so the topology view shows a real multi-node cluster. Only ports **80** and **443** are published publicly; the Kubernetes API stays on localhost.
+
+```bash
+# On EC2 (after cloning the repo):
+PORTFOLIO_DOMAIN=k8s.example.com CERT_MANAGER_EMAIL=you@example.com ./scripts/aws-provision.sh
+
+# From your laptop (build, push, deploy):
+PORTFOLIO_DOMAIN=k8s.example.com ./scripts/deploy-to-aws.sh
+```
+
+Remote `kubectl` access uses an SSH tunnel — see `prod-kubeconfig.example.yaml`.
 
 ---
 

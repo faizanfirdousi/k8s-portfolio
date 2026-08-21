@@ -276,8 +276,8 @@ function renderPage(repos) {
   <div class="container">
     <div class="page-layout">
       <div class="page-main">
-    <div class="breadcrumb"><span>~/portfolio</span> / projects</div>
-    <div class="pod-badge"><div class="dot"></div>Served by <code>projects-*</code> pod in <code>ns/projects</code></div>
+    <div class="breadcrumb"><a href="/">~/portfolio</a> / projects</div>
+    <div class="pod-badge"><div class="dot"></div>Served by <code data-live="pod-name">projects-*</code> pod in <code>ns/projects</code></div>
     <h1>Projects</h1>
     <p class="subtitle">
       Featured projects and code repositories. Live stats fetched from

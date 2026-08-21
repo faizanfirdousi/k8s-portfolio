@@ -1,0 +1,34 @@
+# k3d cluster config for AWS EC2 production.
+# Multi-node (1 server + 2 agents) for the live topology visualization.
+# Only HTTP/HTTPS are published — the Kubernetes API stays on localhost inside EC2.
+#
+# Access kubectl remotely via SSH tunnel:
+#   ssh -L 6443:127.0.0.1:6443 ubuntu@<ec2-ip>
+#   export KUBECONFIG=prod-kubeconfig.yaml  # server: https://127.0.0.1:6443
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: portfolio
+
+servers: 1
+agents: 2
+
+ports:
+  - port: 80:80
+    nodeFilters:
+      - loadbalancer
+  - port: 443:443
+    nodeFilters:
+      - loadbalancer
+
+image: rancher/k3s:v1.29.2-k3s1
+
+options:
+  k3s:
+    extraArgs:
+      - arg: "--kubelet-arg=eviction-hard=imagefs.available<1%,nodefs.available<1%,nodefs.inodesFree<3%"
+        nodeFilters:
+          - server:*
+          - agent:*

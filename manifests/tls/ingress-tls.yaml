@@ -1,0 +1,118 @@
+# Production TLS routes — apply only when a domain and Certificate are configured.
+# See scripts/deploy-to-aws.sh (requires PORTFOLIO_DOMAIN).
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: portfolio-http-redirect
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: HostRegexp(`{host:.+}`)
+      kind: Rule
+      priority: 1
+      middlewares:
+        - name: redirect-https
+      services:
+        - name: frontend
+          namespace: frontend
+          port: 80
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: portfolio-secure
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  tls:
+    secretName: portfolio-tls
+  routes:
+    - match: PathPrefix(`/api`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: security-headers
+        - name: global-ratelimit
+        - name: request-buffer
+      services:
+        - name: proxy
+          namespace: proxy
+          port: 80
+
+    - match: PathPrefix(`/about`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-about
+        - name: security-headers
+        - name: global-ratelimit
+      services:
+        - name: about
+          namespace: about
+          port: 80
+
+    - match: PathPrefix(`/projects`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-projects
+        - name: security-headers
+        - name: global-ratelimit
+      services:
+        - name: projects
+          namespace: projects
+          port: 80
+
+    - match: PathPrefix(`/blog`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-blog
+        - name: security-headers
+        - name: global-ratelimit
+      services:
+        - name: blog
+          namespace: blog
+          port: 80
+
+    - match: PathPrefix(`/skills`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-skills
+        - name: security-headers
+        - name: global-ratelimit
+      services:
+        - name: skills
+          namespace: skills
+          port: 80
+
+    - match: PathPrefix(`/contact`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: strip-contact
+        - name: security-headers
+        - name: contact-ratelimit
+        - name: request-buffer
+      services:
+        - name: contact
+          namespace: contact
+          port: 80
+
+    - match: PathPrefix(`/`)
+      kind: Rule
+      priority: 1
+      middlewares:
+        - name: security-headers
+        - name: global-ratelimit
+      services:
+        - name: frontend
+          namespace: frontend
+          port: 80
