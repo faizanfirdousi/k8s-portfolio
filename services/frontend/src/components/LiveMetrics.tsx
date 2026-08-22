@@ -60,7 +60,7 @@ export default function LiveMetrics() {
           <Box size={20} />
         </div>
         <div>
-          <p className="text-xs font-medium text-zinc-900 dark:text-zinc-400">Active Pods</p>
+          <p className="text-xs font-medium text-zinc-800">Active Pods</p>
           <div className="flex items-baseline gap-2">
             <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
               {loading && !metrics ? '...' : metrics?.totalPods || '0'}
@@ -79,7 +79,7 @@ export default function LiveMetrics() {
           <Cpu size={20} />
         </div>
         <div>
-          <p className="text-xs font-medium text-zinc-900 dark:text-zinc-400 flex items-center gap-1">
+          <p className="text-xs font-medium text-zinc-800 flex items-center gap-1">
             {cpuLabel}
             {showUsageCpu && <Zap size={10} className="text-yellow-500" />}
           </p>
@@ -95,7 +95,7 @@ export default function LiveMetrics() {
           <Database size={20} />
         </div>
         <div>
-          <p className="text-xs font-medium text-zinc-900 dark:text-zinc-400 flex items-center gap-1">
+          <p className="text-xs font-medium text-zinc-800 flex items-center gap-1">
             {memLabel}
             {showUsageMem && <Zap size={10} className="text-yellow-500" />}
           </p>

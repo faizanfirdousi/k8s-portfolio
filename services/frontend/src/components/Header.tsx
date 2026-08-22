@@ -24,7 +24,7 @@ export default function Header({
   onThemeToggle,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-white/90 px-3 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-white/90 px-3 backdrop-blur-xl dark:border-zinc-700 dark:bg-zinc-900/90 sm:px-6">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Button
           variant="ghost"
@@ -37,17 +37,20 @@ export default function Header({
           {menuOpen ? <X size={18} /> : <Menu size={18} />}
         </Button>
 
-        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold sm:text-base">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-xs font-bold text-white shadow-lg shadow-indigo-500/30">K</span>
-          <span className="truncate max-[420px]:hidden"><span className="text-indigo-600">K8s</span><span className="text-zinc-400">.dev</span><span className="text-zinc-900">/portfolio</span></span>
-        </div>
+        <a href="/" className="flex min-w-0 items-center gap-2 text-sm font-semibold sm:text-base no-underline">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-xs font-bold text-white shadow-lg shadow-indigo-500/30">FF</span>
+          <span className="truncate max-[420px]:hidden text-zinc-900">
+            <span className="text-indigo-600">Faizan</span>
+            <span> Firdousi</span>
+          </span>
+        </a>
 
         <span
           className={cn(
             'hidden items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide sm:inline-flex',
             clusterOnline
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-600',
+              ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/60 dark:text-green-300'
+              : 'border-red-200 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300',
           )}
         >
           <span className={cn('h-1.5 w-1.5 rounded-full', clusterOnline ? 'bg-green-500' : 'bg-red-500')} />

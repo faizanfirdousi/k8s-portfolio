@@ -36,13 +36,13 @@ export default function MainContent({ pods, nodes, clusterHealthy, onPodClick, v
   return (
     <main className="min-w-0 flex-1 xl:min-h-0 xl:overflow-y-auto">
       <section className="hero-surface border-b border-zinc-200 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <p className="mono mb-2 text-xs font-medium text-teal-600">$ kubectl get portfolio --live</p>
-        <p className="mb-2 text-sm font-semibold text-zinc-700">Hi, I’m Faizan Firdousi.</p>
+        <p className="mono mb-2 text-xs font-medium text-teal-700">$ kubectl get portfolio --live</p>
+        <p className="mb-2 text-sm font-semibold text-zinc-900">Hi, I’m Faizan Firdousi.</p>
         <h1 className="max-w-3xl text-[clamp(1.75rem,5vw,2.25rem)] font-bold tracking-tight text-zinc-900 leading-[1.15]">
-          A Kubernetes cluster, <span className="text-indigo-600">built as my portfolio.</span>
+          Cloud Engineer &amp; Go Developer. <span className="text-indigo-600">This is my portfolio.</span>
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500 sm:text-base">
-          Every page is its own service and pod. Explore the live cluster below to see the infrastructure behind this website.
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-800 sm:text-base">
+          I build cloud infrastructure and backend systems. The live cluster below is how this site actually runs.
         </p>
         <a
           href="/about"
@@ -50,10 +50,10 @@ export default function MainContent({ pods, nodes, clusterHealthy, onPodClick, v
         >
           Know more about me <ArrowRight size={15} />
         </a>
-        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-          <span><strong className="text-zinc-700">Page loaded:</strong> {formatMilliseconds(pageMetrics.loadMs)}</span>
-          <span><strong className="text-zinc-700">Server response:</strong> {formatMilliseconds(pageMetrics.ttfbMs)}</span>
-          <span><strong className="text-zinc-700">Cluster API:</strong> {formatMilliseconds(topologyResponseMs)}</span>
+        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-800">
+          <span><strong className="text-zinc-900">Page loaded:</strong> {formatMilliseconds(pageMetrics.loadMs)}</span>
+          <span><strong className="text-zinc-900">Server response:</strong> {formatMilliseconds(pageMetrics.ttfbMs)}</span>
+          <span><strong className="text-zinc-900">Cluster API:</strong> {formatMilliseconds(topologyResponseMs)}</span>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {[
@@ -63,7 +63,7 @@ export default function MainContent({ pods, nodes, clusterHealthy, onPodClick, v
           ].map(({ icon: Icon, text }) => (
             <span
               key={text}
-              className="inline-flex items-center gap-1.5 rounded-full border-2 border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
             >
               <Icon size={12} />
               {text}
@@ -85,26 +85,26 @@ export default function MainContent({ pods, nodes, clusterHealthy, onPodClick, v
       <div className="relative min-w-0 p-4 sm:p-6 lg:p-8">
         <LiveMetrics />
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Infrastructure map</p>
-            <div className="flex items-center gap-3">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-700">Infrastructure map</p>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <h2 className="text-lg font-bold text-zinc-900">Live cluster topology</h2>
               {nodes.length === 1 && (
-                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800">
                   Single Node K3s (AWS EC2)
                 </span>
               )}
             </div>
             {nodes.length === 1 && (
-              <p className="mt-1 text-xs text-zinc-500 max-w-xl">
-                <strong>Transparency Note:</strong> This is an honest representation of the cluster. Unlike local k3d setups where nodes are simulated via containers, this runs natively on a single AWS EC2 instance where the Control Plane and Worker are the exact same machine.
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300 max-w-xl">
+                <strong className="text-zinc-800 dark:text-zinc-200">Transparency Note:</strong> This is an honest representation of the cluster. Unlike local k3d setups where nodes are simulated via containers, this runs natively on a single AWS EC2 instance where the Control Plane and Worker are the exact same machine.
               </p>
             )}
           </div>
-          <div className="flex items-center justify-between gap-3 sm:justify-end">
-            <span className="mono hidden rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] text-zinc-500 sm:block">click a node to inspect</span>
-            <div className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white p-1">
+          <div className="flex w-full shrink-0 items-center justify-between gap-3 sm:w-auto sm:justify-end">
+            <span className="mono hidden rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 sm:block">click a node to inspect</span>
+            <div className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white p-1 dark:border-zinc-600 dark:bg-zinc-900">
               <Button
                 variant={view === 'cluster' ? 'outline' : 'ghost'}
                 size="sm"

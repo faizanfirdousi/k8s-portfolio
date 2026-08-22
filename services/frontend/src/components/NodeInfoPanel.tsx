@@ -69,12 +69,12 @@ export default function NodeInfoPanel({ route, pod, onClose }: NodeInfoPanelProp
       className="pointer-events-auto absolute bottom-6 left-1/2 z-20 w-[min(420px,92vw)] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="rounded-2xl border-2 border-zinc-900 bg-white p-4 shadow-[6px_6px_0_0_#18181b]">
+      <div className="rounded-2xl border-2 border-zinc-900 bg-white p-4 shadow-[6px_6px_0_0_#18181b] dark:border-zinc-600 dark:bg-zinc-900 dark:shadow-[6px_6px_0_0_#020617]">
         {/* Header */}
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
-            <div className="mono text-sm font-bold text-indigo-600">{route.route}</div>
-            <div className="text-xs text-zinc-500">namespace / {route.namespace}</div>
+            <div className="mono text-sm font-bold text-indigo-600 dark:text-indigo-400">{route.route}</div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-300">namespace / {route.namespace}</div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <X size={16} />
@@ -99,21 +99,21 @@ export default function NodeInfoPanel({ route, pod, onClose }: NodeInfoPanelProp
         </div>
 
         {/* K8s metadata grid */}
-        <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-zinc-50 p-2 text-center">
+        <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-zinc-50 p-2 text-center dark:bg-zinc-800/80">
           {[
             { label: 'Ready', value: pod?.ready ?? '—/—' },
             { label: 'Restarts', value: pod !== undefined ? String(pod.restarts) : '—' },
             { label: 'Age', value: pod?.age ?? '—' },
           ].map(({ label, value }) => (
             <div key={label}>
-              <div className="text-[10px] uppercase text-zinc-400">{label}</div>
-              <div className="mono text-sm font-semibold">{value}</div>
+              <div className="text-[10px] uppercase text-zinc-500 dark:text-zinc-400">{label}</div>
+              <div className="mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{value}</div>
             </div>
           ))}
         </div>
 
         {/* Live cAdvisor metrics */}
-        <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+        <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/80">
           <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             <Zap size={11} className="text-yellow-500" />
             Live Usage
@@ -128,7 +128,7 @@ export default function NodeInfoPanel({ route, pod, onClose }: NodeInfoPanelProp
               </div>
               <div>
                 <div className="text-[10px] text-zinc-400">CPU</div>
-                <div className="mono text-sm font-bold text-zinc-900">
+                <div className="mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   {liveMetrics ? formatCpuCores(liveMetrics.cpuUsageCores) : '—'}
                 </div>
               </div>
@@ -139,7 +139,7 @@ export default function NodeInfoPanel({ route, pod, onClose }: NodeInfoPanelProp
               </div>
               <div>
                 <div className="text-[10px] text-zinc-400">Memory</div>
-                <div className="mono text-sm font-bold text-zinc-900">
+                <div className="mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   {liveMetrics ? formatMemBytes(liveMetrics.memoryUsageBytes) : '—'}
                 </div>
               </div>
@@ -152,7 +152,7 @@ export default function NodeInfoPanel({ route, pod, onClose }: NodeInfoPanelProp
           )}
         </div>
 
-        <p className="mb-4 text-xs leading-relaxed text-zinc-500">{route.description}</p>
+        <p className="mb-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{route.description}</p>
 
         <a
           href={route.href}

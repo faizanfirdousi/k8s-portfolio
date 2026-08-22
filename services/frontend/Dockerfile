@@ -1,19 +1,12 @@
 # services/frontend/Dockerfile
-FROM node:22-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
+# dist/ is built on the host (see publish-images.sh) then copied in — avoids stale Docker layer cache.
 FROM nginx:1.27-alpine
 LABEL maintainer="Faizan Firdousi"
 LABEL portfolio.section="frontend"
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY dist/ /usr/share/nginx/html
 
-# Configure Nginx for unprivileged non-root execution
 RUN sed -i 's|pid\s*/run/nginx.pid;|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf && \
     sed -i 's|error_log.*|error_log /dev/stderr notice;|g' /etc/nginx/nginx.conf && \
     sed -i 's|access_log.*|access_log /dev/stdout main;|g' /etc/nginx/nginx.conf && \

@@ -414,7 +414,7 @@ export default function ClusterScene3D({
         <span className="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400">
           <span className="h-2 w-2 rounded-sm bg-indigo-600 dark:bg-indigo-500" /> Control Plane
         </span>
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="text-zinc-400">|</span>
         {workerLegend.map(({ color, label }) => (
           <span
             key={label}
@@ -428,7 +428,7 @@ export default function ClusterScene3D({
             {label}
           </span>
         ))}
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="text-zinc-400">|</span>
         <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
           <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500" /> Pods
         </span>

@@ -28,6 +28,9 @@ kubectl apply -f "$ROOT_DIR/manifests/cross-namespace-services.yaml"
 echo "==> Applying Traefik middlewares + HTTP ingress routes..."
 kubectl apply -f "$ROOT_DIR/manifests/ingress.yaml"
 
+echo "==> Enabling Traefik cross-namespace routing..."
+"$SCRIPT_DIR/fix-traefik-cross-namespace.sh"
+
 if [[ -n "$PORTFOLIO_DOMAIN" ]]; then
   echo "==> Applying TLS for $PORTFOLIO_DOMAIN..."
   kubectl delete ingressroute portfolio -n default --ignore-not-found
@@ -37,8 +40,9 @@ if [[ -n "$PORTFOLIO_DOMAIN" ]]; then
 fi
 
 echo ""
-echo "==> Verifying IngressRoutes..."
+echo "==> Verifying IngressRoutes and Middlewares..."
 kubectl get ingressroutes.traefik.io -A 2>/dev/null || kubectl get ingressroute -A
+kubectl get middlewares.traefik.io -A 2>/dev/null || kubectl get middleware -A
 
 echo ""
 echo "==> Pod status..."
@@ -50,5 +54,19 @@ curl -s -o /dev/null -w "  /          → HTTP %{http_code}\n" http://localhost/
 curl -s -o /dev/null -w "  /about     → HTTP %{http_code}\n" http://localhost/about
 curl -s -o /dev/null -w "  /api/topology → HTTP %{http_code}\n" http://localhost/api/topology
 
+echo "==> Restarting deployments to pick up new images..."
+for NS_SERVICE in \
+  "about about" \
+  "projects projects" \
+  "skills skills" \
+  "blog blog" \
+  "contact contact" \
+  "proxy proxy" \
+  "frontend frontend"; do
+  NS="${NS_SERVICE%% *}"
+  SVC="${NS_SERVICE##* }"
+  kubectl rollout restart "deployment/$SVC" -n "$NS"
+done
+
 echo ""
-echo "✅ Manifests applied."
+echo "✅ Manifests applied and deployments restarted."

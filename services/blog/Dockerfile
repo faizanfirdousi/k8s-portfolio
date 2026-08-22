@@ -9,8 +9,8 @@ LABEL maintainer="Faizan Firdousi"
 LABEL portfolio.section="blog"
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app/node_modules ./node_modules
-COPY --chown=1000:1000 shared/metrics-panel.js ./src/metrics-panel.js
 COPY --chown=1000:1000 blog/src/ ./src/
+COPY --chown=1000:1000 shared/metrics-panel.js ./src/metrics-panel.js
 COPY --chown=1000:1000 blog/package.json ./
 
 USER 1000:1000

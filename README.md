@@ -86,14 +86,16 @@ Anyone can list "Kubernetes" on a resume. I wanted a portfolio that proves it in
 Production runs **k3d on EC2** (1 server + 2 agents) so the topology view shows a real multi-node cluster. Only ports **80** and **443** are published publicly; the Kubernetes API stays on localhost.
 
 ```bash
-# On EC2 (after cloning the repo):
+# On EC2 (one-time):
 PORTFOLIO_DOMAIN=k8s.example.com CERT_MANAGER_EMAIL=you@example.com ./scripts/aws-provision.sh
 
-# From your laptop (build, push, deploy):
-PORTFOLIO_DOMAIN=k8s.example.com ./scripts/deploy-to-aws.sh
-```
+# Deploy: push to main (GitHub Actions builds images + SSHs to EC2).
+# Manual fallback from laptop:
+EC2_HOST=1.2.3.4 ./scripts/deploy-to-aws.sh
 
-Remote `kubectl` access uses an SSH tunnel — see `prod-kubeconfig.example.yaml`.
+# kubectl on the server:
+ssh ubuntu@<ec2-ip> "kubectl get pods -A"
+```
 
 ---
 

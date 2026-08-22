@@ -98,8 +98,145 @@ function metricSlot(label, hint) {
     </div>`;
 }
 
+const HOME_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>';
+
+const SUN_ICON_SVG =
+  '<svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+
+const MOON_ICON_SVG =
+  '<svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+
+function pageChromeCss() {
+  return `
+    .page-toolbar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-toolbar__actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+    .toolbar-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.8125rem;
+      line-height: 1;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .toolbar-btn--icon {
+      padding: 0.45rem;
+    }
+    .toolbar-btn svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .dark .sun-icon { display: none; }
+    .dark .moon-icon { display: block; }
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
+    .breadcrumb {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .breadcrumb a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width: 640px) {
+      .container { padding: 0.75rem 0.85rem 1rem; }
+      .page-toolbar {
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.6rem;
+      }
+      .toolbar-btn span.toolbar-btn__label { display: none; }
+      .pod-badge { display: none; }
+    }`;
+}
+
+function renderPageToolbar(sectionLabel) {
+  const safeSection = sectionLabel;
+  return `
+    <header class="page-toolbar">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/">Faizan Firdousi</a> / ${safeSection}
+      </nav>
+      <div class="page-toolbar__actions">
+        <a href="/" class="toolbar-btn" aria-label="Back to home">
+          ${HOME_ICON_SVG}
+          <span class="toolbar-btn__label">Home</span>
+        </a>
+        <button type="button" id="theme-toggle-btn" class="toolbar-btn toolbar-btn--icon theme-toggle" aria-label="Toggle theme">
+          ${SUN_ICON_SVG}
+          ${MOON_ICON_SVG}
+        </button>
+      </div>
+    </header>`;
+}
+
+function themeToggleScript() {
+  return `
+    <script>
+    (function() {
+      var toggleBtn = document.getElementById('theme-toggle-btn');
+      var root = document.documentElement;
+      if (localStorage.getItem('portfolio-theme') === 'dark') {
+        root.classList.add('dark');
+      }
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+          root.classList.toggle('dark');
+          localStorage.setItem('portfolio-theme', root.classList.contains('dark') ? 'dark' : 'light');
+        });
+      }
+      window.addEventListener('storage', function(e) {
+        if (e.key === 'portfolio-theme') {
+          if (e.newValue === 'dark') { root.classList.add('dark'); }
+          else { root.classList.remove('dark'); }
+        }
+      });
+    })();
+    <\/script>`;
+}
+
 function metricsPanelCss() {
   return `
+    ${pageChromeCss()}
     .page-layout {
       display: grid;
       grid-template-columns: 1fr;
@@ -190,9 +327,9 @@ function metricsPanelCss() {
     }
 
     @media (max-width: 640px) {
-      .container { padding: 1rem 0.85rem; }
-      .breadcrumb { margin-bottom: 1.25rem; word-break: break-all; }
-      .pod-badge { margin-bottom: 1.25rem; max-width: 100%; flex-wrap: wrap; }
+      .container { padding: 0.75rem 0.85rem 1rem; }
+      .breadcrumb { margin-bottom: 0; }
+      .pod-badge { display: none; }
       .subtitle, .page-subtitle { margin-bottom: 1.5rem; font-size: 0.9rem; }
       .repos-grid { grid-template-columns: 1fr; }
       .repo-header { flex-direction: column; align-items: flex-start; }
@@ -387,6 +524,9 @@ function metricsLiveScript() {
 
 module.exports = {
   metricsPanelCss,
+  pageChromeCss,
+  renderPageToolbar,
+  themeToggleScript,
   renderMetricsPanel,
   renderMetricsPanelHtml,
   metricsLiveScript,

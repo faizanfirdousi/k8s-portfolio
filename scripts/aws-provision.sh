@@ -1,7 +1,7 @@
 #!/bin/bash
 # aws-provision.sh
 # Run on a fresh Ubuntu 22.04 EC2 instance to create a multi-node k3d cluster.
-# The cluster API is bound to localhost only — use an SSH tunnel for remote kubectl.
+# The cluster API stays on localhost. Deploy via GitHub Actions or SSH — kubectl runs on this host.
 
 set -euo pipefail
 
@@ -73,12 +73,7 @@ echo "Security:"
 echo "  - Only ports 80 and 443 are published to the internet."
 echo "  - The Kubernetes API is NOT exposed publicly."
 echo ""
-echo "Remote kubectl (from your laptop):"
-echo "  ssh -L 6443:127.0.0.1:6443 ubuntu@<ec2-ip>"
-echo "  k3d kubeconfig get portfolio > prod-kubeconfig.yaml"
-echo "  # Edit server URL to https://127.0.0.1:6443"
-echo ""
-echo "Deploy the portfolio:"
-echo "  ./scripts/publish-images.sh <dockerhub-user>"
-echo "  PORTFOLIO_DOMAIN=your.domain ./scripts/deploy-to-aws.sh"
+echo "Deploy (push to main, or manual from laptop):"
+echo "  EC2_HOST=<ec2-ip> ./scripts/deploy-to-aws.sh"
+echo "  kubectl get pods -A   # run on this EC2 instance"
 echo "==========================================================="

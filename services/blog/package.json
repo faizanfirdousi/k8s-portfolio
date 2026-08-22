@@ -10,6 +10,6 @@
     "express": "^4.18.2",
     "marked": "^9.0.0",
     "node-fetch": "^2.7.0",
-    "sanitize-html": "^2.17.7"
+    "sanitize-html": "2.13.1"
   }
 }

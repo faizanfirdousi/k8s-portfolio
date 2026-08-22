@@ -32,9 +32,9 @@ export default function MetricsPanel({
   const namespaceCount = data ? new Set(data.pods.map((p) => p.namespace)).size : 0;
   const totalRestarts = data?.pods.reduce((sum, p) => sum + p.restarts, 0) ?? 0;
   return (
-    <aside className="flex w-full flex-col gap-4 border-t-2 border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:border-l xl:border-t-0 2xl:w-96">
-      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-700">
+    <aside className="flex w-full flex-col gap-4 border-t-2 border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900 xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:border-l xl:border-t-0 2xl:w-96">
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
           <span className="h-2 w-2 rounded-full bg-indigo-500" />
           Cluster Info
         </h3>
@@ -49,7 +49,7 @@ export default function MetricsPanel({
             },
           ].map(({ label, value, accent }) => (
             <div key={label} className="flex justify-between gap-2">
-              <dt className="text-zinc-500">{label}</dt>
+              <dt className="text-zinc-700">{label}</dt>
               <dd className={cn('mono font-medium', accent && 'text-indigo-600')}>{value}</dd>
             </div>
           ))}
@@ -61,17 +61,17 @@ export default function MetricsPanel({
             { label: 'Namespaces', value: namespaceCount, color: 'text-purple-600' },
             { label: 'Restarts', value: totalRestarts, color: totalRestarts > 0 ? 'text-amber-600' : '' },
           ].map(({ label, value, color }) => (
-            <div key={label} className="rounded-xl border border-zinc-200 bg-zinc-50 p-2 text-center">
+            <div key={label} className="rounded-xl border border-zinc-200 bg-zinc-50 p-2 text-center dark:border-zinc-700 dark:bg-zinc-900">
               <div className={cn('text-lg font-bold', color)}>{value}</div>
-              <div className="text-[10px] uppercase text-zinc-400">{label}</div>
+              <div className="text-[10px] uppercase text-zinc-600">{label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-zinc-700">Request delivery</h3>
-        <p className="mb-3 text-xs text-zinc-500">Measured in this browser for your visit.</p>
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+        <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">Request delivery</h3>
+        <p className="mb-3 text-xs text-zinc-700">Measured in this browser for your visit.</p>
         <dl className="space-y-2 text-sm">
           {[
             { label: 'Page loaded', value: formatMilliseconds(pageMetrics.loadMs) },
@@ -80,15 +80,15 @@ export default function MetricsPanel({
             { label: 'Snapshot age', value: lastUpdated ? 'Live · ≤ 5 s' : 'Waiting' },
           ].map(({ label, value }) => (
             <div key={label} className="flex justify-between gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
-              <dt className="text-zinc-500">{label}</dt>
+              <dt className="text-zinc-700">{label}</dt>
               <dd className="mono text-right text-xs font-semibold text-zinc-800">{value}</dd>
             </div>
           ))}
         </dl>
       </section>
 
-      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-zinc-700">Live Activity</h3>
+      <section className="rounded-2xl border-2 border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">Live Activity</h3>
         <ul className="max-h-48 space-y-2 overflow-y-auto">
           {(events.length > 0 ? events.slice(0, 6) : data?.pods.slice(0, 5) ?? []).map((item, i) => {
             const isEvent = 'reason' in item;

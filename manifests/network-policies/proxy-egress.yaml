@@ -1,11 +1,12 @@
 # manifests/network-policies/proxy-egress.yaml
 #
-# Allows the proxy to reach the Kubernetes API and Prometheus only.
+# Allows the proxy to reach the Kubernetes API, Prometheus, and respond
+# to in-cluster clients (Traefik, health probes).
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-proxy-to-k8s-api
+  name: allow-proxy-egress
   namespace: proxy
 spec:
   podSelector:
@@ -14,26 +15,23 @@ spec:
   policyTypes:
     - Egress
   egress:
+    # In-cluster pod traffic (API via service IP, responses to Traefik)
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
-      ports:
-        - protocol: TCP
-          port: 443
+        - ipBlock:
+            cidr: 10.42.0.0/16
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
+        - ipBlock:
+            cidr: 10.43.0.0/16
+    # k3d docker bridge (API server endpoint)
+    - to:
+        - ipBlock:
+            cidr: 172.18.0.0/16
       ports:
         - protocol: TCP
           port: 443
         - protocol: TCP
           port: 6443
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: monitoring
-      ports:
+    # Prometheus
+    - ports:
         - protocol: TCP
           port: 9090

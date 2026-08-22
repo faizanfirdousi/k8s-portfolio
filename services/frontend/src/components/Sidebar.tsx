@@ -25,22 +25,22 @@ export default function Sidebar({ frontendPod, open, onClose, pods }: SidebarPro
       />
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r-2 border-zinc-200 bg-white p-4 transition-transform xl:static xl:z-auto xl:translate-x-0 xl:border-r',
+          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r-2 border-zinc-200 bg-white p-4 transition-transform dark:border-zinc-700 dark:bg-zinc-900 xl:static xl:z-auto xl:translate-x-0 xl:border-r',
           open ? 'translate-x-0' : '-translate-x-full xl:translate-x-0',
         )}
       >
-        <div className="mb-6 rounded-2xl border-2 border-zinc-900 bg-zinc-50 p-4 shadow-[4px_4px_0_0_#18181b]">
+        <div className="mb-6 rounded-2xl border-2 border-zinc-900 bg-zinc-50 p-4 shadow-[4px_4px_0_0_#18181b] dark:border-zinc-600 dark:bg-zinc-800 dark:shadow-[4px_4px_0_0_#020617]">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white">
             FF
           </div>
-          <h2 className="text-lg font-bold text-zinc-900">Hi, I'm Faizan</h2>
-          <p className="text-xs font-medium text-zinc-500">Cloud Engineer · Go Developer</p>
-          <p className="mt-1 text-[11px] text-teal-600 font-medium">Learning AI</p>
-          <p className="mono mt-2 text-[10px] text-zinc-400">› kubectl get pods -A</p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Hi, I'm Faizan</h2>
+          <p className="text-xs font-medium text-zinc-800">Cloud Engineer · Go Developer</p>
+          <p className="mt-1 text-[11px] text-teal-700 font-medium dark:text-teal-400">Learning AI</p>
+          <p className="mono mt-2 text-[10px] text-zinc-500 dark:text-zinc-400">› kubectl get pods -A</p>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto" aria-label="Portfolio sections">
-          <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+          <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Cluster / Routes
           </p>
           {NAV_ITEMS.map((item) => {
@@ -51,7 +51,7 @@ export default function Sidebar({ frontendPod, open, onClose, pods }: SidebarPro
                 key={item.path}
                 href={item.path}
                 onClick={onClose}
-                className="group flex items-center justify-between rounded-xl border-2 border-transparent px-3 py-3 transition-all hover:border-zinc-900 hover:bg-zinc-50 hover:shadow-[3px_3px_0_0_#18181b]"
+                className="group flex items-center justify-between rounded-xl border-2 border-transparent px-3 py-3 transition-all hover:border-zinc-900 hover:bg-zinc-50 hover:shadow-[3px_3px_0_0_#18181b] dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:hover:shadow-[3px_3px_0_0_#020617]"
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -61,8 +61,8 @@ export default function Sidebar({ frontendPod, open, onClose, pods }: SidebarPro
                     {item.emoji}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-zinc-900">{item.label}</div>
-                    <div className="mono text-[10px] text-zinc-400">{item.desc}</div>
+                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.label}</div>
+                    <div className="mono text-[10px] text-zinc-500 dark:text-zinc-400">{item.desc}</div>
                   </div>
                 </div>
                 <span

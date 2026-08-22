@@ -9,7 +9,7 @@
 
 const express = require('express');
 const fetch = require('node-fetch');
-const { metricsPanelCss, renderMetricsPanel } = require('./metrics-panel');
+const { metricsPanelCss, renderMetricsPanel, renderPageToolbar, themeToggleScript } = require('./metrics-panel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -94,75 +94,24 @@ function contactPageHtml(errorMessage = '') {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    .cluster-cta {
-      position: absolute;
-      top: 1.5rem;
-      right: 4.5rem;
-      left: auto;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 0.875rem;
-      transition: all 0.2s;
-      z-index: 50;
-    }
-    .cluster-cta:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
     :root {
       --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
       --accent: #4f46e5; --accent2: #0891b2; --text: #0f172a;
-      --muted: #475569; --green: #047857; --tag-bg: #f1f5f9;
+      --muted: #334155; --green: #047857; --tag-bg: #f1f5f9;
     }
     .dark {
       --bg: #0f172a; --surface: #111827; --border: #334155;
       --accent: #a5b4fc; --accent2: #67e8f9; --text: #f8fafc;
       --muted: #cbd5e1; --green: #6ee7b7; --tag-bg: #1e293b;
     }
-    .theme-toggle {
-      position: absolute;
-      top: 1.5rem;
-      right: 1.5rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.5rem;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      z-index: 50;
-    }
-    .theme-toggle:hover {
-      border-color: var(--accent);
-    }
-    .theme-toggle svg { width: 18px; height: 18px; }
-    .dark .sun-icon { display: none; }
-    .dark .moon-icon { display: block; }
-    .sun-icon { display: block; }
-    .moon-icon { display: none; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
-    .breadcrumb { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); margin-bottom: 2rem; }
-    .breadcrumb span { color: var(--accent2); }
     .pod-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 9999px; padding: 0.25rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 2rem; }
     .dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
     h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
-    .subtitle { color: var(--muted); margin-bottom: 2.5rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2.5rem; line-height: 1.6; }
     .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; }
     .form-group { margin-bottom: 1.25rem; }
     label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.4rem; color: var(--muted); }
@@ -182,28 +131,14 @@ function contactPageHtml(errorMessage = '') {
       font-family: 'Inter', sans-serif;
     }
     .submit-btn:hover { opacity: 0.85; }
-    .k8s-note { margin-top: 1.5rem; font-size: 0.78rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; text-align: center; }
     ${metricsPanelCss()}
   </style>
 </head>
 <body>
-  <script>
-    const currentTheme = localStorage.getItem('portfolio-theme');
-    if (currentTheme === 'dark') { document.documentElement.classList.add('dark'); }
-  </script>
-  
-  <a href="/" class="cluster-cta" aria-label="View Live Cluster">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-    View Live Cluster
-  </a>
-  <button id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle theme">
-    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-  </button>
   <div class="container">
     <div class="page-layout">
       <div class="page-main">
-    <div class="breadcrumb"><a href="/">~/portfolio</a> / contact</div>
+    ${renderPageToolbar('contact')}
     <div class="pod-badge"><div class="dot"></div>Served by <code data-live="pod-name">contact-*</code> pod in <code>ns/contact</code></div>
 
     <h1>Say hello.</h1>
@@ -229,32 +164,12 @@ function contactPageHtml(errorMessage = '') {
         </div>
         <button type="submit" class="submit-btn" id="submit-btn">Send Message</button>
       </form>
-      <p class="k8s-note">
-        // This form is handled by a Pod in the <code>contact</code> namespace.<br/>
-        // Submissions are logged to stdout: <code>kubectl logs -n contact deploy/contact</code>
-      </p>
     </div>
       </div>
       ${renderMetricsPanel('contact')}
     </div>
   </div>
-  <script>
-    const toggleBtn = document.getElementById('theme-toggle-btn');
-    const root = document.documentElement;
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        root.classList.toggle('dark');
-        const isDark = root.classList.contains('dark');
-        localStorage.setItem('portfolio-theme', isDark ? 'dark' : 'light');
-      });
-    }
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'portfolio-theme') {
-        if (e.newValue === 'dark') { root.classList.add('dark'); }
-        else { root.classList.remove('dark'); }
-      }
-    });
-  </script>
+  ${themeToggleScript()}
 </body>
 </html>`;
 }
